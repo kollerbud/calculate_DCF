@@ -1,3 +1,4 @@
 *.txt
 api_keys.py
+!Lib
 Lib/*
