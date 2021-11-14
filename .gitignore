@@ -2,3 +2,4 @@
 api_keys.py
 !Lib
 Lib/*
+*/Lib/*
