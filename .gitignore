@@ -1,4 +1,4 @@
 notes.txt
 api_keys.py
-!Lib/
-Lib/*
+Lib/
+*/Lib/

@@ -1,6 +1,6 @@
 from google.cloud import bigquery
 import os
-os.environ['GOOGLE_APPLICATION_CREDENTIALS']=r'C:\Users\Li\Downloads\logical-dream-288204-17621de4247c.json'
+os.environ['GOOGLE_APPLICATION_CREDENTIALS']=r'D:\Download\logical-dream-288204-09f96ef061e9.json'
 
 def big_query():
     client = bigquery.Client()
@@ -14,4 +14,4 @@ def big_query():
 
 
 if __name__ == '__main__':
-    pass
+    big_query()
