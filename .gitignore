@@ -2,3 +2,5 @@ notes.txt
 api_keys.py
 Lib/
 */Lib/
+others/
+git rm --cached <file>
