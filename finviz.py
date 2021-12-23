@@ -1,4 +1,3 @@
-'''
-is finviz.com useful?
+import yfinance
 
-'''
+pick = yfinance.Ticker('MSFT')

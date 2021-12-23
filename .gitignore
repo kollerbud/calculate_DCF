@@ -3,4 +3,6 @@ api_keys.py
 Lib/
 */Lib/
 others/
+*.sql
 git rm --cached <file>
+finviz.py
