@@ -1,8 +1,10 @@
 notes.txt
 api_keys.py
 Lib/
+__pycache__/
+.vscode/
+Scripts/
 */Lib/
 others/
-*.sql
+*.db
 git rm --cached <file>
-finviz.py
