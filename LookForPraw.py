@@ -10,5 +10,10 @@ reddit.read_only=True
 
 subreddit = reddit.subreddit('STOCKS').search(query='NVDA', time_filter='week')
 for submission in subreddit:
-    print(submission.title)
+    print('/r/stocks',submission.title)
+
+
+subreddit = reddit.subreddit('STOCKMARKET').search(query='NVDA', time_filter='week')
+for submission in subreddit:
+    print('/r/stockmarket', submission.title)
 

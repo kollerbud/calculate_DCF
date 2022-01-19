@@ -1,9 +1,11 @@
 notes.txt
 api_keys.py
 Lib/
-__pycache__/
-.vscode/
+*/__pycache__/
+*/.vscode/
 Scripts/
+*/Scripts/
+filing_files/
 */Lib/
 others/
 *.db
