@@ -8,12 +8,12 @@ reddit = praw.Reddit(client_id = REDDIT_API_KEYS.client_id,
                            )
 reddit.read_only=True
 
-subreddit = reddit.subreddit('STOCKS').search(query='NVDA', time_filter='week')
+subreddit = reddit.subreddit('STOCKS').search(query='SQ', time_filter='week')
 for submission in subreddit:
     print('/r/stocks',submission.title)
 
 
-subreddit = reddit.subreddit('STOCKMARKET').search(query='NVDA', time_filter='week')
+subreddit = reddit.subreddit('STOCKMARKET').search(query='SQ', time_filter='week')
 for submission in subreddit:
     print('/r/stockmarket', submission.title)
 
