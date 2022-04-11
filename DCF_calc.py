@@ -1,4 +1,5 @@
 import functools
+import DCF_Input
 
 
 class BuildDCF:
@@ -10,7 +11,9 @@ class BuildDCF:
                  indus_growth_avg: float,
                  tax_rate: float,
                  sales_cap_ratio: float,
+                 wacc: float,
                  growth_taper: float = 0.5) -> None:
+
         self.cur_rev = current_rev
         self.growth_rate = growth_rate
         self.growth_taper = growth_taper
@@ -18,9 +21,9 @@ class BuildDCF:
         self.indus_growth_avg = indus_growth_avg
         self.tax_rate = tax_rate
         self.sales_cap = sales_cap_ratio
+        self.wacc = wacc
 
 
-    
     @functools.cached_property
     def _revenue_projection(self):
         # first five year revenue projection
@@ -34,7 +37,7 @@ class BuildDCF:
         return first_five + last_five
 
     @property
-    def _ebit(self):
+    def model_eval(self):
 
         # grab revenues
         revenues = self._revenue_projection
@@ -58,14 +61,31 @@ class BuildDCF:
         # free cash flow
         fcff = [ebit-re_inv for ebit, re_inv in zip(ebits, reinvestment)]
 
-    def _free_cash_flow(self):
-        pass
+        # cumulative discount factor
+        discount_factor = []
+        for i in range(1,11):
+            if i == 1:
+                discount_factor.append(1/(1+self.wacc))
+            discount_factor.append((1/(1+self.wacc))**i)
+
+        # presen value
+        pv = []
+        for x,y in zip(fcff, discount_factor):
+            pv.append(x*y)
+
+        return sum(pv)
+        
+        '''
+        Starting terminal cash flow
+        '''
 
 
 if __name__ == '__main__':
-    print(BuildDCF(current_rev=100,
-                   growth_rate=0.2,
-                   ebit_margin=0.3,
-                   indus_growth_avg=0.1,
-                   sales_cap_ratio=2,
-                   tax_rate=0.2)._ebit())
+    print(BuildDCF(current_rev=10,
+                   growth_rate=0.1,
+                   ebit_margin=1,
+                   indus_growth_avg=0.05,
+                   tax_rate=0.02,
+                   sales_cap_ratio=1,
+                   growth_taper=0.05,
+                   wacc=0.01).model_eval)

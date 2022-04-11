@@ -5,14 +5,16 @@ import functools
 import yfinance as yf
 
 
-class DATA_DCF:
+class DCF_DATA:
     # Build Data pipeline to feed into calculation
 
     def __init__(self, ticker: str, years_back: int) -> None:
         self.ticker = str(ticker).upper()
         # could've less than # of years situation (new IPO)
         self.years_back = years_back
-        self.req_header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0'}
+        if self.years_back < 2:
+            raise ValueError('must be more than 2 years to perform valuation')
+        self.req_header = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0;  Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0'}
 
     def _request_statements(self, statement: str):
         _api_link = ('https://financialmodelingprep.com/api/v3/' +
@@ -21,13 +23,18 @@ class DATA_DCF:
                      + '&apikey=' + str(FMP.api_key))
         request_response = (requests.get(_api_link,
                                          headers=self.req_header).json())
-
-        if len(request_response) < 2:
-            raise ValueError('must be more than 2 years to perform valuation')
-
         print('running API request')
 
         return request_response
+
+    @functools.cached_property
+    def _request_quote(self):
+        quote_link = ('https://financialmodelingprep.com/api/v3/quote' + '/'+
+                      self.ticker + '?apikey=' + str(FMP.api_key))
+        quote_response = (requests.get(quote_link,
+                                       headers=self.req_header).json())
+        
+        return quote_response
 
     @functools.cached_property
     def _income_statement(self):
@@ -88,8 +95,9 @@ class DATA_DCF:
         # effective tax rate
         effTax = (self._income_statement[0]['incomeTaxExpense'] /
                   self._income_statement[0]['incomeBeforeTax'])
+        # if net_income is 0 then tax is 0
         if effTax < 0:
-            effTax = 0
+            effTax = 0.00001
 
         # sales to capital ratio
         net_income = self._income_statement[0]['netIncome']
@@ -99,8 +107,18 @@ class DATA_DCF:
         # cost of capital
         stock_price = yf.Ticker(self.ticker).info['currentPrice']
         equity = stock_price * self._income_statement[0]['weightedAverageShsOut']
-        
-        
+
+        # market capital
+        # WACC-weighted cost of capital
+        # WACC = (E/V*Re) + (D/V*Rd*(1-Tc))
+        ticker_info = self._yahoo_ticker(self.ticker)
+        market_cap = ticker_info['marketCap']
+        interest_ = self._income_statement[0]['interestExpense']
+        # cost of equity    
+        Re = 0.0159 + ticker_info['beta'] * (0.10-0.0159)
+        Rd = (interest_/thisBVOD)*(1-0.21)
+        wacc = ((market_cap/(market_cap+thisBVOD)*Re) +
+                (thisBVOD/(market_cap+thisBVOD)*Rd*(1-effTax)))
 
         return {'Revenues': [thisRev, lastRev],
                 'EBIT': [thisEbit, lastEbit],
@@ -109,13 +127,11 @@ class DATA_DCF:
                 'Cash': [thisCash, lastCash],
                 'Shares': shares,
                 'EffectiveTax': effTax,
-                'sales_to_cap': sales_to_cap
+                'sales_to_cap': sales_to_cap,
+                'wacc': wacc
                 }
-    
-    def check_yahoo(self):
-        return yf.Ticker(self.ticker).info
+
 
 
 if __name__ == '__main__':
-    print(DATA_DCF('SNOW', 5).input_fileds)
-    print(DATA_DCF())
+    print(DCF_DATA('NVDA',2).input_fileds)
