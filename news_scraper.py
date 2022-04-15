@@ -6,7 +6,7 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 class GatherNews:
 
     def __init__(self, ticker) -> None:
-        self.ticker = ticker
+        self.ticker = str(ticker).upper()
         self.analyzer = SentimentIntensityAnalyzer()
 
     @property
@@ -40,6 +40,9 @@ class GatherNews:
                                 self.analyzer.polarity_scores(news[1])
                                 })
         return finviz_news
+    
+    def analysts_targets(self) -> list:
+        pass
 
     def gather_news(self) -> list:
         return self._from_yahoo + self._from_finviz

@@ -111,7 +111,10 @@ class DCF_DATA:
         # market capital
         # WACC-weighted cost of capital
         # WACC = (E/V*Re) + (D/V*Rd*(1-Tc))
-        ticker_info = self._yahoo_ticker(self.ticker)
+
+        'need to look at this one'
+        ticker_info = yf.Ticker(self.ticker).info
+
         market_cap = ticker_info['marketCap']
         interest_ = self._income_statement[0]['interestExpense']
         # cost of equity    
@@ -134,4 +137,4 @@ class DCF_DATA:
 
 
 if __name__ == '__main__':
-    print(DCF_DATA('NVDA',2).input_fileds)
+    print(DCF_DATA('ABT', 2).input_fileds)

@@ -32,7 +32,7 @@ class GatherReddit:
 
 
 if __name__ == '__main__':
-    print(GatherReddit('ABT').market_subreddits())
+    print(GatherReddit('$ON').market_subreddits())
 '''
 
 reddit = praw.Reddit(client_id = REDDIT_API_KEYS.client_id,

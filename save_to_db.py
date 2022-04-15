@@ -1,8 +1,4 @@
-from google.cloud import bigquery
 import sqlite3
-
-import os
-os.environ['GOOGLE_APPLICATION_CREDENTIALS']=r'D:\Download\logical-dream-288204-09f96ef061e9.json'
 
 # steps need: query by CIK (need to build a CIK look up table)
 #

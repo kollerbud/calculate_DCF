@@ -10,3 +10,8 @@ filing_files/
 others/
 *.db
 git rm --cached <file>
+
+
+share/*
+etc/*
+
