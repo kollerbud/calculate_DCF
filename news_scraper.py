@@ -1,6 +1,8 @@
 import yfinance as yf
 import finviz
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+import pandas as pd
+from datetime import datetime
 
 
 class GatherNews:
@@ -16,11 +18,13 @@ class GatherNews:
         run Vader sentimental analysis on news title
         '''
         yahoo_news = []
-        for news in yf.Ticker(self.ticker).news:
+        for news in yf.Ticker(self.ticker).news[:10]:
             news.pop('uuid')
             news.pop('type')
             news.update({'title_sentiment_score':
                          self.analyzer.polarity_scores(news['title'])})
+            news['providerPublishTime'] = (datetime.utcfromtimestamp(news['providerPublishTime']).strftime('%Y-%m-%d'))
+            
             yahoo_news.append(news)
         return yahoo_news
 
@@ -31,11 +35,11 @@ class GatherNews:
         run vader sentimental analysis on news title
         '''
         finviz_news = []
-        for news in finviz.get_news(self.ticker):
+        for news in finviz.get_news(self.ticker)[:10]:
             finviz_news.append({'title': news[1],
                                 'publisher': news[-1],
                                 'link': news[2],
-                                'publish_time': news[0],
+                                'providerPublishTime': news[0],
                                 'title_sentiment_score':
                                 self.analyzer.polarity_scores(news[1])
                                 })
@@ -45,10 +49,15 @@ class GatherNews:
         pass
 
     def gather_news(self) -> list:
-        return self._from_yahoo + self._from_finviz
+        df_yahoo = pd.DataFrame.from_dict(self._from_yahoo)
+        df_finviz = pd.DataFrame.from_dict(self._from_finviz)
+        
+        df = pd.concat([df_yahoo,df_finviz], axis=0)
+        df = df.reset_index(drop=True)
+        df.drop(columns=['title_sentiment_score'], axis=1, inplace=True)
+
+        return df
 
 
 if __name__ == '__main__':
-
-    r = GatherNews('SMH').gather_news()
-    print(r)
+    print(GatherNews('NVDA').gather_news())

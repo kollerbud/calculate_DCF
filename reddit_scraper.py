@@ -1,6 +1,8 @@
 import praw
 from api_keys import REDDIT_API_KEYS
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+import pandas as pd
+
 
 class GatherReddit:
 
@@ -19,20 +21,20 @@ class GatherReddit:
             pass
         pass
 
-    def market_subreddits(self):
+    def market_subreddits(self) -> pd.DataFrame:
         sub_reddits = ('stockmarket+finance+stocks')
         reddit_posts = []
         for post in (self.reddit.subreddit(sub_reddits).
-                     search(query=self.ticker, time_filter='week')):
+                     search(query=self.ticker, time_filter='month')):
             reddit_posts.append({'title': post.title,
-                                 'upvotes': post.score,
-                                 'post_content': post.selftext
+                                 'upvotes': post.score
+                                 #'post_content': post.selftext
                                  })
-        return reddit_posts
+        return pd.DataFrame.from_dict(reddit_posts)
 
 
 if __name__ == '__main__':
-    print(GatherReddit('$ON').market_subreddits())
+    print(GatherReddit('amd').market_subreddits().head())
 '''
 
 reddit = praw.Reddit(client_id = REDDIT_API_KEYS.client_id,
