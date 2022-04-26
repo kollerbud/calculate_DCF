@@ -11,7 +11,7 @@ class GatherReddit:
         self.reddit = praw.Reddit(client_id=REDDIT_API_KEYS.client_id,
                                   client_secret=REDDIT_API_KEYS.client_secret,
                                   user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0'
-                                 )
+                                  )
         self.reddit.read_only = True
         self.analyzer = SentimentIntensityAnalyzer()
 
@@ -23,33 +23,25 @@ class GatherReddit:
 
     def market_subreddits(self) -> pd.DataFrame:
         sub_reddits = ('stockmarket+finance+stocks')
-        reddit_posts = []
+        market_posts = []
         for post in (self.reddit.subreddit(sub_reddits).
                      search(query=self.ticker, time_filter='month')):
-            reddit_posts.append({'title': post.title,
+            market_posts.append({'title': post.title,
                                  'upvotes': post.score
                                  #'post_content': post.selftext
                                  })
         return pd.DataFrame.from_dict(reddit_posts)
+    
+    def wallstreetbets(self) -> pd.DataFrame:
+        sub_reddits = ('wallstreetbets')
+        wsb_posts = []
+        for p in (self.reddit.subreddit(sub_reddits).
+                  search(query=self.ticker, time_filter='month')):
+            wsb_posts.append({'title': p.title,
+                              'upvotes': p.score
+                              })
+        return pd.DataFrame.from_dict(wsb_posts)
 
 
 if __name__ == '__main__':
-    print(GatherReddit('amd').market_subreddits().head())
-'''
-
-reddit = praw.Reddit(client_id = REDDIT_API_KEYS.client_id,
-                          client_secret = REDDIT_API_KEYS.client_secret,
-                          user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0'
-                           )
-reddit.read_only=True
-
-# have to make multi-subreddit public, not sure how to use private ones
-
-sub_reddits = ('stockmarket+finance+stocks')
-
-
-for post in reddit.subreddit(sub_reddits).search(query='NVDA', time_filter='week'):
-    print(post.title, post.score, post.selftext)
-
-'''
-
+    print(GatherReddit('snow').wallstreetbets())

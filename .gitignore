@@ -10,8 +10,7 @@ filing_files/
 others/
 *.db
 git rm --cached <file>
-
-
+yfinance.cache
 share/*
 etc/*
 

@@ -6,11 +6,11 @@ from datetime import datetime
 
 
 class GatherNews:
+    analyzer = SentimentIntensityAnalyzer()
 
     def __init__(self, ticker) -> None:
         self.ticker = str(ticker).upper()
-        self.analyzer = SentimentIntensityAnalyzer()
-
+    
     @property
     def _from_yahoo(self) -> list:
         '''
@@ -24,7 +24,6 @@ class GatherNews:
             news.update({'title_sentiment_score':
                          self.analyzer.polarity_scores(news['title'])})
             news['providerPublishTime'] = (datetime.utcfromtimestamp(news['providerPublishTime']).strftime('%Y-%m-%d'))
-            
             yahoo_news.append(news)
         return yahoo_news
 
@@ -45,14 +44,17 @@ class GatherNews:
                                 })
         return finviz_news
     
-    def analysts_targets(self) -> list:
-        pass
+    def analysts_targets(self) -> pd.DataFrame:
+        _rating = finviz.get_analyst_price_targets(self.ticker)
+        _rating = pd.DataFrame.from_dict(_rating)
 
-    def gather_news(self) -> list:
+        return _rating
+
+    def gather_news(self) -> pd.DataFrame:
         df_yahoo = pd.DataFrame.from_dict(self._from_yahoo)
         df_finviz = pd.DataFrame.from_dict(self._from_finviz)
         
-        df = pd.concat([df_yahoo,df_finviz], axis=0)
+        df = pd.concat([df_yahoo, df_finviz], axis=0)
         df = df.reset_index(drop=True)
         df.drop(columns=['title_sentiment_score'], axis=1, inplace=True)
 
@@ -60,4 +62,5 @@ class GatherNews:
 
 
 if __name__ == '__main__':
-    print(GatherNews('NVDA').gather_news())
+    x = GatherNews('snow').analysts_targets()
+    print(x)
