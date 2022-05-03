@@ -21,27 +21,33 @@ class GatherReddit:
             pass
         pass
 
-    def market_subreddits(self) -> pd.DataFrame:
-        sub_reddits = ('stockmarket+finance+stocks')
-        market_posts = []
+    def search_subreddits(self, section='normal') -> pd.DataFrame:
+
+        if section not in ['normal', 'meme']:
+            raise ValueError('use "normal" or "meme"')
+
+        if section == 'normal':
+            sub_reddits = ('stockmarket+finance+stocks')
+        if section == 'meme':
+            sub_reddits = ('wallstreetbets')
+
+        reddit_posts = []
         for post in (self.reddit.subreddit(sub_reddits).
                      search(query=self.ticker, time_filter='month')):
-            market_posts.append({'title': post.title,
-                                 'upvotes': post.score
+                    
+            reddit_posts.append({'title': post.title,
+                                 'upvotes': post.score,
+                                 'link': post.url
                                  #'post_content': post.selftext
                                  })
-        return pd.DataFrame.from_dict(reddit_posts)
-    
-    def wallstreetbets(self) -> pd.DataFrame:
-        sub_reddits = ('wallstreetbets')
-        wsb_posts = []
-        for p in (self.reddit.subreddit(sub_reddits).
-                  search(query=self.ticker, time_filter='month')):
-            wsb_posts.append({'title': p.title,
-                              'upvotes': p.score
-                              })
-        return pd.DataFrame.from_dict(wsb_posts)
-
+        if len(reddit_posts) != 0:
+            df_posts = pd.DataFrame.from_dict(reddit_posts)
+            df_posts.sort_values(by='upvotes', ascending=False, inplace=True)
+            
+            return df_posts
+        
+        else:
+            return None
 
 if __name__ == '__main__':
-    print(GatherReddit('snow').wallstreetbets())
+    print(GatherReddit('amd').search_subreddits())

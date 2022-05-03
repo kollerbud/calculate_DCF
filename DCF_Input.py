@@ -4,8 +4,6 @@ import yfinance as yf
 import requests_cache
 
 
-# replace with yfinance to remove api constraint
-
 class DCF_DATA:
     # Build Data pipeline to feed into calculation
     _header = 'Mozilla/5.0 (Windows NT 10.0;  Win64; x64; rv:91.0) Gecko/20100101 Firefox/91.0'
@@ -81,16 +79,16 @@ class DCF_DATA:
             effTax = (self._income_statement['Income Tax Expense'][0] /
                       self._income_statement['Income Before Tax'][0])
 
+            if effTax < 0:
+                effTax = 0.00001
+
         except KeyError:
             print('server unresponsive, re-run')
         # if net_income is 0 then tax is 0
-        if effTax < 0:
-            effTax = 0.00001
 
         # sales to capital ratio
-        net_income = self._income_statement['Net Income'][0]
         shareholder_equity = self._balanced_sheet['Total Stockholder Equity'][0]
-        sales_to_cap = net_income/(thisBVOD + shareholder_equity - thisCash)
+        sales_to_cap = thisRev/(thisBVOD + shareholder_equity - thisCash)
 
         # market capital
         # WACC-weighted cost of capital
@@ -119,4 +117,4 @@ class DCF_DATA:
 
 
 if __name__ == '__main__':
-    print(DCF_DATA('nvda').input_fileds)
+    print(DCF_DATA('snow')._balanced_sheet.columns)

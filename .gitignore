@@ -13,4 +13,4 @@ git rm --cached <file>
 yfinance.cache
 share/*
 etc/*
-
+__pycache__/*
