@@ -1,5 +1,6 @@
 notes.txt
 api_keys.py
+save_to_db
 Lib/
 */__pycache__/
 */.vscode/
