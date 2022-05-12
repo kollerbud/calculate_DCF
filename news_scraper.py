@@ -22,13 +22,13 @@ class GatherNews:
             news.pop('uuid')
             news.pop('type')
             news.update({'title_sentiment_score':
-                         self.analyzer.polarity_scores(news['title'])})
+                         (self.analyzer.polarity_scores(news['title']).values())})
             news['providerPublishTime'] = (datetime.utcfromtimestamp(news['providerPublishTime']).strftime('%Y-%m-%d'))
             yahoo_news.append(news)
         return yahoo_news
 
     @property
-    def _from_finviz(self) -> list:
+    def _from_finviz(self) -> pd.DataFrame:
         '''
         gather news from Finviz and
         run vader sentimental analysis on news title
@@ -40,10 +40,11 @@ class GatherNews:
                                 'link': news[2],
                                 'providerPublishTime': news[0],
                                 'title_sentiment_score':
-                                self.analyzer.polarity_scores(news[1])
+                                (self.analyzer.polarity_scores(news[1]).values())
                                 })
+
         return finviz_news
-    
+
     def analysts_targets(self) -> pd.DataFrame:
         _rating = finviz.get_analyst_price_targets(self.ticker)
         _rating = pd.DataFrame.from_dict(_rating)
@@ -53,14 +54,13 @@ class GatherNews:
     def gather_news(self) -> pd.DataFrame:
         df_yahoo = pd.DataFrame.from_dict(self._from_yahoo)
         df_finviz = pd.DataFrame.from_dict(self._from_finviz)
-        
+
         df = pd.concat([df_yahoo, df_finviz], axis=0)
         df = df.reset_index(drop=True)
-        df.drop(columns=['title_sentiment_score'], axis=1, inplace=True)
 
         return df
 
 
 if __name__ == '__main__':
-    x = GatherNews('snow').analysts_targets()
+    x = GatherNews('snow').gather_news()
     print(x)
