@@ -1,48 +1,40 @@
-import functools
 from DCF_Input import DCF_DATA
+from dataclasses import dataclass
 
-
+@dataclass
 class BuildDCF:
+    cur_rev: float
+    growth_rate: float
+    ebit_margin: float
+    indus_growth_avg: float
+    tax_rate: float
+    sales_cap: float
+    wacc: float
+    debt: float
+    cash: float
+    shares: float
+    int_rate: float = None
+    growth_taper: float = 0.85
 
-    def __init__(self,
-                 current_rev: float,
-                 growth_rate: float,
-                 ebit_margin: float,
-                 indus_growth_avg: float,
-                 tax_rate: float,
-                 sales_cap_ratio: float,
-                 wacc: float,
-                 debt: float,
-                 cash: float,
-                 shares: float,
-                 growth_taper: float = 0.85) -> None:
-
-        self.cur_rev = current_rev
-        self.growth_rate = growth_rate
-        self.ebit_margin = ebit_margin
-        self.indus_growth_avg = indus_growth_avg
-        self.tax_rate = tax_rate
-        self.sales_cap = sales_cap_ratio
-        self.wacc = wacc
-        self.debt = debt
-        self.cash = cash
-        self.shares = shares
-        self.int_rate = None
-
-
-    def _revenue_projection(self, growth_rate=0, growth_shift=1):
-        if growth_rate == 0:
-            growth_rate = self.growth_rate
+    @property
+    def _revenue_projection(self) -> list:
         # first five year revenue projection
-        first_five = [self.cur_rev*((1+growth_rate)**year)
+        first_five = [self.cur_rev*((1+self.growth_rate)**year)
                       for year in range(1, 6)]
-        
+
         # last firve year revenue projection
         last_five = [self.cur_rev*((
-            1+(growth_rate*growth_shift))**year)
+            1+(self.growth_rate*self.growth_taper))**year)
                      for year in range(6, 11)]
 
         return first_five + last_five
+
+    def _ebit(self, termin_perc: float = None) -> list:
+        # make sure list of revenue projection is the input
+        # termin_perc = last 5 years of ebit % of revenue
+        #  default value same as current ebit %
+        rev = self._revenue_projection
+
 
     def disount_rate(self, int_rate=0, method='wacc'):
         if method not in ['dcf', 'wacc']:
@@ -100,26 +92,26 @@ class BuildDCF:
         value_of_equity = all_pv_terminal - self.debt + self.cash
 
         return {'est_stock_price': value_of_equity/self.shares}
-    
+
     def dcf_model_eval(self, growth_taper):
         rev = self._revenue_projection(growth_taper=growth_taper)
         return None
 
-    
-
 
 if __name__ == '__main__':
-    raw_values = DCF_DATA('snow').input_fileds
+    raw_values = DCF_DATA('amd').input_fileds()
+    print(raw_values)
 
 
-    dcf_2 = BuildDCF(current_rev=sum(raw_values['Revenues'])/2,
+    dcf_2 = BuildDCF(cur_rev=sum(raw_values['Revenues'])/2,
                      growth_rate=raw_values['growth_rate'],
                      ebit_margin=raw_values['oper_margin'],
                      indus_growth_avg=0.20,
                      tax_rate=raw_values['EffectiveTax'],
-                     sales_cap_ratio=raw_values['sales_to_cap'],
+                     sales_cap=raw_values['sales_to_cap'],
                      wacc=raw_values['wacc'],
                      debt=raw_values['BVOD'][0],
                      cash=raw_values['Cash'][0],
-                     shares=raw_values['Shares']).prof_model_eval(growth_shift=1.2)
+                     shares=raw_values['Shares'])._revenue_projection
     print(dcf_2)
+    
