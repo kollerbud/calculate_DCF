@@ -1,30 +1,22 @@
 from statistics import mean
 import functools
 import yfinance as yf
-import requests_cache
 import pandas as pd
+from dataclasses import dataclass
 
-
+@dataclass
 class DCF_DATA:
     '''Gather data from yfinance(API) to feed into a discount cash flow(DCF) model
     '''
-
-    _header = ('Mozilla/5.0 (Windows NT 10.0;  Win64; x64; rv:91.0)' +
-               'Gecko/20100101 Firefox/91.0')
-    _req_session = requests_cache.CachedSession('yfinance.cache')
-    _req_session.headers['User-agent'] = _header
-
-    def __init__(self, ticker: str) -> None:
-        self.ticker = str(ticker).upper()
-        self.session = DCF_DATA._req_session
+    ticker: str
 
     @functools.cached_property
-    def _income_statement(self) -> pd.Dataframe:
+    def _income_statement(self) -> pd.DataFrame:
         '''
         pull income statement from API for a specific company, 
         and cacheing for later use
         '''
-        fin = yf.Ticker(self.ticker, session=self.session).financials
+        fin = yf.Ticker(self.ticker).financials
         fin = fin.T
         return fin
 
@@ -34,7 +26,7 @@ class DCF_DATA:
         pull cash flow statement from API for a specific company, 
         and cacheing for later use
         '''
-        cash = yf.Ticker(self.ticker, session=self.session).cashflow
+        cash = yf.Ticker(self.ticker).cashflow
         cash = cash.T
         return cash
 
@@ -44,7 +36,7 @@ class DCF_DATA:
         pull balance sheet statement from API for a specific company, 
         and cacheing for later use
         '''
-        balance = yf.Ticker(self.ticker, session=self.session).balance_sheet
+        balance = yf.Ticker(self.ticker).balance_sheet
         balance = balance.T
         return balance
 
@@ -54,10 +46,10 @@ class DCF_DATA:
         grab general info of a company
         '''
         'check if "beta" value is contained inside info'
-        if yf.Ticker(self.ticker, session=self.session).info['beta'] is None:
+        if yf.Ticker(self.ticker).info['beta'] is None:
             raise ValueError('beta value missing')
         
-        return yf.Ticker(self.ticker, session=self.session).info
+        return yf.Ticker(self.ticker).info
 
     @property
     def _yoy_grwoth_(self) -> float:
