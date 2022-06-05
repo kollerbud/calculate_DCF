@@ -1,11 +1,7 @@
-from statistics import mean
 import functools
 import yfinance as yf
 import pandas as pd
-from dataclasses import dataclass
 from google.cloud import storage
-import os
-
 import os
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'dcf-model-project-89fcb0a775c4.json'
 
@@ -26,7 +22,7 @@ class DCF_DATA:
     @functools.cached_property
     def _income_statement(self) -> pd.DataFrame:
         '''
-        pull income statement from API for a specific company, 
+        pull income statement from API for a specific company,
         and cacheing for later use
         '''
         fin = yf.Ticker(self.ticker).financials
@@ -34,12 +30,22 @@ class DCF_DATA:
         fin['ticker'] = self.ticker
         fin.reset_index(inplace=True)
         fin.rename(columns={fin.columns[0]: 'period'}, inplace=True)
+
+        # trim some extra columns off
+        keep_cols = ['ticker', 'period', 'Income Before Tax',
+                     'Research Development', 'Net Income',
+                     'Selling General Administrative',
+                     'Gross Profit', 'Interest Expense', 'Operating Income',
+                     'Income Tax Expense', 'Total Revenue', 'Cost Of Revenue']
+        fin = fin[keep_cols]
+        fin = fin.fillna(0)
+
         return fin
 
     @functools.cached_property
     def _cash_flow_statement(self) -> pd.DataFrame:
         '''
-        pull cash flow statement from API for a specific company, 
+        pull cash flow statement from API for a specific company,
         and cacheing for later use
         '''
         cash = yf.Ticker(self.ticker).cashflow
@@ -48,12 +54,14 @@ class DCF_DATA:
         cash.reset_index(inplace=True)
         cash.rename(columns={cash.columns[0]: 'period'}, inplace=True)
 
+        # trim some extra columns off
+        # nothing use in the calculation yet, off for now
         return cash
 
     @functools.cached_property
     def _balanced_sheet(self) -> pd.DataFrame:
         '''
-        pull balance sheet statement from API for a specific company, 
+        pull balance sheet statement from API for a specific company,
         and cacheing for later use
         '''
         balance = yf.Ticker(self.ticker).balance_sheet
@@ -61,7 +69,12 @@ class DCF_DATA:
         balance['ticker'] = self.ticker
         balance.reset_index(inplace=True)
         balance.rename(columns={balance.columns[0]: 'period'}, inplace=True)
-
+        # trim some extra columns off
+        keep_cols = ['ticker', 'period', 'Long Term Debt',
+                     'Total Stockholder Equity',
+                     'Cash', 'Long Term Investments', 'Short Long Term Debt']
+        balance = balance[keep_cols]
+        balance = balance.fillna(0)
         return balance
 
     @functools.cached_property
@@ -77,6 +90,7 @@ class DCF_DATA:
 
         return df_info
 
+    @property
     def generate_csv(self):
         self._income_statement.to_csv(f'{self.ticker}_income_statement.csv',
                                       index=None)
@@ -87,11 +101,14 @@ class DCF_DATA:
         self._cash_flow_statement.to_csv(f'{self.ticker}_cashflow.csv',
                                          index=None)
 
+        return None
 
-def upload_to_bucket(bucket_name, ticker):
 
-    # generate csv files 
-    DCF_DATA(ticker=ticker).generate_csv()
+def upload_to_bucket(bucket_name, tickers=None):
+
+    # generate csv files
+    for ticker in tickers:
+        DCF_DATA(ticker=ticker).generate_csv
     csv_files = [filename for filename in os.listdir() if filename.endswith('.csv')]
     # locate bucket
     bucket = storage.Client().bucket(bucket_name=bucket_name)
@@ -102,5 +119,6 @@ def upload_to_bucket(bucket_name, ticker):
 
     return blob.public_url
 
+
 if __name__ == '__main__':
-    upload_to_bucket(bucket_name='raw-financials-1328', ticker='AMD')
+    upload_to_bucket(bucket_name='raw-financials-1328', tickers=['nvda', 'amd', 'sq'])
