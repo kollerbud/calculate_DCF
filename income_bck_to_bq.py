@@ -2,7 +2,7 @@ import apache_beam as beam
 from apache_beam.pipeline import PipelineOptions
 from api_keys import G_KEYS
 import os
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'dcf-model-project-89fcb0a775c4.json'
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'hello_google.json'
 
 '''
 For income statement
@@ -60,7 +60,7 @@ if __name__ == '__main__':
         | 'parse file' >> beam.Map(parse_file)
         # | 'print out json before parsing' >> beam.Map(print) # be careful with print statement, it will change data format (json) and cause upload error
         | 'write to Bigquery' >> beam.io.WriteToBigQuery(
-            'dcf-model-project:all_data.income_statement',
+            f'{_project}:all_data.income_statement',
             schema=data_schema,
             write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND
             )

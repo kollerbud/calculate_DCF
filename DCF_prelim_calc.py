@@ -3,53 +3,46 @@ import functools
 import yfinance as yf
 import pandas as pd
 from dataclasses import dataclass
+from api_keys import G_KEYS
+import os
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'hello_google.json'
+from google.cloud import bigquery
 
 @dataclass
-class DCF_DATA:
+class DcfPrelim:
     '''Gather data from yfinance(API) to feed into a discount cash flow(DCF) model
     '''
     ticker: str
+    client = bigquery.Client()
 
-    @functools.cached_property
-    def _income_statement(self) -> pd.DataFrame:
-        '''
-        pull income statement from API for a specific company, 
-        and cacheing for later use
-        '''
-        fin = yf.Ticker(self.ticker).financials
-        fin = fin.T
-        return fin
-
-    @functools.cached_property
-    def _cash_flow_statement(self) -> pd.DataFrame:
-        '''
-        pull cash flow statement from API for a specific company, 
-        and cacheing for later use
-        '''
-        cash = yf.Ticker(self.ticker).cashflow
-        cash = cash.T
-        return cash
-
-    @functools.cached_property
-    def _balanced_sheet(self) -> pd.DataFrame:
-        '''
-        pull balance sheet statement from API for a specific company, 
-        and cacheing for later use
-        '''
-        balance = yf.Ticker(self.ticker).balance_sheet
-        balance = balance.T
-        return balance
-
-    @functools.cached_property
-    def _yf_info(self):
-        '''
-        grab general info of a company
-        '''
-        'check if "beta" value is contained inside info'
-        if yf.Ticker(self.ticker).info['beta'] is None:
-            raise ValueError('beta value missing')
+    def __post_init__(self):
+        'check if ticker has info in bigquery'
         
-        return yf.Ticker(self.ticker).info
+        # make ticker upper case
+        self.ticker = str(self.ticker).upper()
+        # query string for bigquery
+        query_str = '''
+                SELECT ticker
+                FROM `all_data.income_statement`
+                WHERE ticker = ?
+                '''
+        # query config
+        job_configs = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter(None, 'STRING', self.ticker)
+            ]
+        )
+        # run query
+        query_job = self.client.query(query=query_str,
+                                      job_config=job_configs)
+        # check point there to see if query returns anything
+        query_result = [row for row in query_job]
+        if len(query_result) == 0:
+            # error is ticker is not in bigquery
+            raise ValueError('ticker return nothing')
+
+    def hello(self):
+        return f'ticker is {self.ticker}'
 
     @property
     def _yoy_grwoth_(self) -> float:
@@ -224,4 +217,4 @@ class DCF_DATA:
                 }
 
 if __name__ == '__main__':
-    print(DCF_DATA('nvda').bookValueOfDebt)
+    print(DcfPrelim('nvda').hello())

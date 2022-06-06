@@ -2,6 +2,7 @@ import functools
 import yfinance as yf
 import pandas as pd
 from google.cloud import storage
+from api_keys import G_KEYS
 import os
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'dcf-model-project-89fcb0a775c4.json'
 
@@ -121,4 +122,5 @@ def upload_to_bucket(bucket_name, tickers=None):
 
 
 if __name__ == '__main__':
-    upload_to_bucket(bucket_name='raw-financials-1328', tickers=['nvda', 'amd', 'sq'])
+    bucket = G_KEYS.bucket
+    upload_to_bucket(bucket_name=bucket, tickers=['abt', 'amd', 'msft', 'nvda', 'sq'])
