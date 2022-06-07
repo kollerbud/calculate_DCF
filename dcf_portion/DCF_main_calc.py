@@ -1,4 +1,4 @@
-from DCF_Input import DCF_DATA
+from DCF_prelim_calc import DcfPrelim
 from dataclasses import dataclass
 
 @dataclass
@@ -37,8 +37,6 @@ class BuildDCF:
 
 
     def disount_rate(self, int_rate=0, method='wacc'):
-        if method not in ['dcf', 'wacc']:
-            raise ValueError('use "dcf" or "wacc"')
 
         if method == 'wacc':
             self.int_rate = self.wacc
