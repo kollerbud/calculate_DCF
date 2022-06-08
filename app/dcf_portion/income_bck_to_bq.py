@@ -2,7 +2,7 @@ import apache_beam as beam
 from apache_beam.pipeline import PipelineOptions
 from api_keys import G_KEYS
 import os
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'hello_google.json'
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'dcf_portion/hello_google.json'
 
 '''
 For income statement

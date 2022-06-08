@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from google.cloud import bigquery
 import yfinance as yf
 import os
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'hello_google.json'
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'app/dcf_portion/hello_google.json'
 
 
 @dataclass
@@ -268,5 +268,5 @@ class DcfPrelim:
                 }
 
 if __name__ == '__main__':
-    x = DcfPrelim('sq').input_fileds()
+    x = DcfPrelim('intc').input_fileds()
     print(x)

@@ -4,7 +4,7 @@ import pandas as pd
 from google.cloud import storage
 from api_keys import G_KEYS
 import os
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'dcf-model-project-89fcb0a775c4.json'
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'app/dcf_portion/hello_google.json'
 
 
 class DCF_DATA:
@@ -71,9 +71,17 @@ class DCF_DATA:
         balance.reset_index(inplace=True)
         balance.rename(columns={balance.columns[0]: 'period'}, inplace=True)
         # trim some extra columns off
+        if 'Long Term Debt' not in balance.columns:
+            balance.loc[:, 'Long Term Debt'] = 0
+        if 'Short Long Term Debt' not in balance.columns:
+            balance.loc[:, 'Short Long Term Debt'] = 0
+        if 'Long Term Investments' not in balance.columns:
+            balance.loc[:, 'Long Term Investments'] = 0
+
         keep_cols = ['ticker', 'period', 'Long Term Debt',
                      'Total Stockholder Equity',
-                     'Cash', 'Long Term Investments', 'Short Long Term Debt']
+                     'Cash', 'Long Term Investments', 'Short Long Term Debt'
+                     ]
         balance = balance[keep_cols]
         balance = balance.fillna(0)
         return balance
@@ -123,4 +131,4 @@ def upload_to_bucket(bucket_name, tickers=None):
 
 if __name__ == '__main__':
     bucket = G_KEYS.bucket
-    upload_to_bucket(bucket_name=bucket, tickers=['abt', 'amd', 'msft', 'nvda', 'sq'])
+    upload_to_bucket(bucket_name=bucket, tickers=['axp'])
