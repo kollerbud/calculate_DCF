@@ -2,14 +2,16 @@ from statistics import mean
 import functools
 from dataclasses import dataclass
 from google.cloud import bigquery
-import yfinance as yf
 import os
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'app/dcf_portion/hello_google.json'
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'app/dcf_portion/'\
+                                               'hello_google.json'
 
 
 @dataclass
-class DcfPrelim:
+class DCFDataInput:
     '''Gather data from yfinance(API) to feed into a discount cash flow(DCF) model
+
+        output for everything need for a DCF calculation
     '''
     ticker: str
     client = bigquery.Client()
@@ -57,6 +59,8 @@ class DcfPrelim:
         # run query
         query_job = self.client.query(query=query_str,
                                       job_config=job_configs)
+        query_job.result()
+        print('ran income statement query')
         query_results = []
         for row in query_job:
             row_dict = {
@@ -94,6 +98,8 @@ class DcfPrelim:
         # run query
         query_job = self.client.query(query=query_str,
                                       job_config=job_configs)
+        query_job.result()
+        print('ran balance sheet query')
         query_results = []
         for row in query_job:
             row_dict = {
@@ -103,14 +109,48 @@ class DcfPrelim:
                         'total_stock_holder': row['total_stock_holder'],
                         'cash': row['cash'],
                         'long_term_invest': row['long_term_invest'],
-                        'short_term_debt': row['short_term_debt']
+                        'short_term_debt': row['short_term_debt'],
+                        'capex': row['capex'],
+                        'net_working_cap': (
+                            row['total_asset'] - row['total_liab']
+                            ),
+                        'depreciation': row['depreciation']
                         }
             query_results.append(row_dict)
 
         return query_results
 
+    @functools.cached_property
+    def ticker_info(self):
+        query_str = '''
+            SELECT *
+            FROM all_data.ticker_info
+            WHERE ticker = ?
+            '''
+        job_configs = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter(None, 'STRING', self.ticker)
+            ]
+        )
+        # run query
+        query_job = self.client.query(query=query_str,
+                                      job_config=job_configs)
+        query_job.result()
+        dict_info = {}
+        for row in query_job:
+            dict_info['market_cap'] = row['market_cap']
+            dict_info['beta'] = row['beta']
+            dict_info['shares_outstanding'] = row['shares_outstanding']
+            dict_info['sector'] = row['sector']
+            dict_info['industry'] = row['industry']
+            dict_info['business_summary'] = row['business_summary']
+            dict_info['current_data'] = row['current_date']
+            dict_info['stock_price'] = row['stock_price']
+
+        return dict_info
+
     @property
-    def _yoy_grwoth_(self) -> float:
+    def yoy_grwoth_(self) -> float:
         '''
         calculate the average year over year revenue growth for last 4 years
         of a company, return a percentage number
@@ -123,7 +163,7 @@ class DcfPrelim:
         return mean_growth
 
     @property
-    def _operating_margin(self) -> float:
+    def operating_margin(self) -> float:
         '''
         caculate the average year over year operating margin of a
         company for last 4 years return a percentage number
@@ -133,140 +173,86 @@ class DcfPrelim:
                    income in self._income_statement]
         margin = [x/y for y, x in zip(_revs, _op_inc)]
 
-        return mean(margin)
+        return margin
 
     @property
-    def revenues(self):
+    def tax_rate(self) -> float:
         '''
-        return last 2 years of revenue numbers of a company,
+        calculate the average tax rate
+        '''
+        ebit = self.ebit
+        tax = self.taxes
+        return [x/y for x, y in zip(tax, ebit)]
+
+    @property
+    def revenues(self) -> list:
+        '''
+        return a list all (4) revenue numbers of a company,
         these numbers should not be none
         '''
-        thisRev = self._income_statement[0]['total_revenue']
-        lastRev = self._income_statement[1]['total_revenue']
-
-        return thisRev, lastRev
+        return [rev['total_revenue'] for rev in self._income_statement]
 
     @property
-    def bookValueOfDebt(self):
+    def ebit(self) -> list:
         '''
-        return last 2 years book value of debt for a company
-        book_value_of_debt = long term debt
-
-        '''
-        thisBVOD = self._balance_sheet[0]['long_term_debt']
-        lastBVOD = self._balance_sheet[1]['long_term_debt']
-
-        return thisBVOD, lastBVOD
-
-    @property
-    def ebit(self):
-        '''
-        return ebit of a company for the last 2 years
+        return ebit of a company for the last 4 years
         these numbers should not be none
         '''
-        thisEbit = self._income_statement[0]['operating_income']
-        lastEbit = self._income_statement[1]['operating_income']
-
-        return thisEbit, lastEbit
+        return [ebit['operating_income'] for ebit in self._income_statement]
 
     @property
-    def bookValueOfEquity(self):
+    def taxes(self) -> list:
         '''
-        return book value of equity, something on the balanced sheet
+        return all taxes paid of a company for 4 years
+        should be a list
         '''
-        thisBVOE = self._balance_sheet[0]['total_stock_holder']
-        lastBVOE = self._balance_sheet[1]['total_stock_holder']
-
-        return thisBVOE, lastBVOE
+        return [tax['income_tax_expense'] for tax in self._income_statement]
 
     @property
-    def cash(self):
+    def depreciation(self) -> list:
         '''
-        return amount of cash on hand, typically including long term
-        investments
+        return list of all depreciation
+
         '''
-        thisCash = (self._balance_sheet[0]['cash'] +
-                    self._balance_sheet[0]['long_term_invest'])
-
-        lastCash = (self._balance_sheet[1]['cash'] +
-                    self._balance_sheet[1]['long_term_invest'])
-
-        return thisCash, lastCash
+        return [depre['depreciation'] for depre in self._balance_sheet]
 
     @property
-    def tax_rate(self):
+    def capex(self) -> list:
         '''
-        return amount of income tax
+        return capex
         '''
-        effTax = (self._income_statement[0]['income_tax_expense'] /
-                  self._income_statement[0]['income_before_tax'])
-        # if the tax rate is negative,
-        # set it close to 0 to avoid divide by zero
-        if effTax < 0:
-            effTax = 0.00001
-        return effTax
+        return [capx['capex'] for capx in self._balance_sheet]
 
     @property
-    def market_cap(self):
-        return yf.Ticker(self.ticker).info['marketCap']
+    def nwc(self) -> list:
+        'return net working capital'
+        return [nwc['net_working_cap'] for nwc in self._balance_sheet]
 
     @property
-    def interests_expense(self):
-        return self._income_statement[0]['interest_expense']
-
-    @property
-    def wacc(self):
+    def cash_minus_debt(self) -> float:
         '''
-        # WACC-weighted cost of capital
-        # WACC = (E/V*Re) + (D/V*Rd*(1-Tc))
+        latest cash minus debt
+        use for equity value calculation
         '''
-        beta = yf.Ticker(self.ticker).info['beta']
-
-        Re = 0.0159 + beta * (0.10-0.0159)
-        Rd = (self.interests_expense/self.bookValueOfDebt[0])*(1-0.21)
-        wacc = ((self.market_cap/(self.market_cap+self.bookValueOfDebt[0])*Re) +
-                (self.bookValueOfDebt[0]/(self.market_cap+self.bookValueOfDebt[0])*Rd*(1-self.tax_rate)))
-
-        return wacc
+        return (self._balance_sheet[0]['cash'] -
+                self._balance_sheet[0]['long_term_debt']
+                )
 
     def input_fileds(self):
         # compile all sections to one method
+        return {
+            'revenues': self.revenues,
+            'ebit': self.ebit,
+            'taxes': self.taxes,
+            'depreciation': self.depreciation,
+            'capex': self.capex,
+            'netWorkCap': self.nwc,
+            'cashMinusDebt': self.cash_minus_debt,
+            'yoyGrowth': self.yoy_grwoth_,
+            'operMargin': self.operating_margin,
+            'tax_rate': self.tax_rate
+        }
 
-        # revenues
-        thisRev, lastRev = (self.revenues[0],
-                            self.revenues[1])
-        # EBIT or operating income
-        thisEbit, lastEbit = (self.ebit[0], self.ebit[1])
-        # book value of equity
-        thisBVOE, lastBVOE = (self.bookValueOfEquity[0],
-                              self.bookValueOfEquity[1])
-        # book value of debt, most likely long term debt
-        thisBVOD, lastBVOD = (self.bookValueOfDebt[0],
-                              self.bookValueOfDebt[1])
-        # Cash
-        thisCash, lastCash = (self.cash[0], self.cash[1])
-        # number of shares outstanding
-        shares = yf.Ticker(self.ticker).info['sharesOutstanding']
-
-        # effective tax rate
-        effTax = self.tax_rate
-        # sales to capital ratio
-        shareholder_equity = self._balance_sheet[0]['total_stock_holder']
-        sales_to_cap = thisRev/(thisBVOD + shareholder_equity - thisCash)
-
-        return {'Revenues': [thisRev, lastRev],
-                'EBIT': [thisEbit, lastEbit],
-                'BVOE': [thisBVOE, lastBVOE],
-                'BVOD': [thisBVOD, lastBVOD],
-                'Cash': [thisCash, lastCash],
-                'Shares': shares,
-                'EffectiveTax': effTax,
-                'sales_to_cap': sales_to_cap,
-                'wacc': self.wacc,
-                'growth_rate': self._yoy_grwoth_,
-                'oper_margin': self._operating_margin
-                }
 
 if __name__ == '__main__':
-    x = DcfPrelim('intc').input_fileds()
-    print(x)
+    print(DCFDataInput('sq').input_fileds())

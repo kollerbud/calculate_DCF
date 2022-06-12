@@ -1,8 +1,16 @@
-from DCF_prelim_calc import DcfPrelim
+from DCF_prelim_calc import DCFDataInput
 from dataclasses import dataclass
 
 @dataclass
 class BuildDCF:
+    '''
+    Input  should be from DcfPrelim
+    put decision making points on the dcf method
+    
+    -input: risk_free_rate after 10 years
+    
+    '''
+
     cur_rev: float
     growth_rate: float
     ebit_margin: float
@@ -29,12 +37,10 @@ class BuildDCF:
 
         return first_five + last_five
 
-    def _ebit(self, termin_perc: float = None) -> list:
+    def _ebit(self):
         # make sure list of revenue projection is the input
-        # termin_perc = last 5 years of ebit % of revenue
-        #  default value same as current ebit %
+        # as percent of revenue
         rev = self._revenue_projection
-
 
     def disount_rate(self, int_rate=0, method='wacc'):
 
@@ -92,14 +98,13 @@ class BuildDCF:
         return {'est_stock_price': value_of_equity/self.shares}
 
     def dcf_model_eval(self, growth_taper):
-        rev = self._revenue_projection(growth_taper=growth_taper)
-        return None
+        pass
+        
 
 
 if __name__ == '__main__':
-    raw_values = DCF_DATA('amd').input_fileds()
+    raw_values = DcfPrelim('amd').input_fileds()
     print(raw_values)
-
 
     dcf_2 = BuildDCF(cur_rev=sum(raw_values['Revenues'])/2,
                      growth_rate=raw_values['growth_rate'],
@@ -112,4 +117,16 @@ if __name__ == '__main__':
                      cash=raw_values['Cash'][0],
                      shares=raw_values['Shares'])._revenue_projection
     print(dcf_2)
-    
+
+
+'''
+    @property
+    def wacc(self) -> float:
+
+        A quick calculation of wacc
+        wacc = (%debt * cost_of_debt * (1-tax_rate)) +
+                (% equity * cost of equity)
+        cost_of_equity = risk free rate + (beta * market risk premium)
+        cost_of_debt = average of debt notes
+
+'''
