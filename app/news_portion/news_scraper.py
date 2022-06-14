@@ -1,30 +1,29 @@
 import yfinance as yf
 import finviz
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import pandas as pd
 from datetime import datetime
 
 
 class GatherNews:
-    analyzer = SentimentIntensityAnalyzer()
 
     def __init__(self, ticker) -> None:
         self.ticker = str(ticker).upper()
-    
+
     @property
     def _from_yahoo(self) -> list:
         '''
         gather news from yahoo and
         run Vader sentimental analysis on news title
         '''
+        # apparently yahoo only returns 8 articles
         yahoo_news = []
         for news in yf.Ticker(self.ticker).news[:10]:
+            news.update({'ticker': self.ticker})
             news.pop('uuid')
             news.pop('type')
-            news.update({'title_sentiment_score':
-                         (self.analyzer.polarity_scores(news['title']).values())})
             news['providerPublishTime'] = (datetime.utcfromtimestamp(news['providerPublishTime']).strftime('%Y-%m-%d'))
             yahoo_news.append(news)
+
         return yahoo_news
 
     @property
@@ -34,33 +33,38 @@ class GatherNews:
         run vader sentimental analysis on news title
         '''
         finviz_news = []
-        for news in finviz.get_news(self.ticker)[:10]:
-            finviz_news.append({'title': news[1],
+        for news in finviz.get_news(self.ticker)[:20]:
+            finviz_news.append({
+                                'ticker': self.ticker,
+                                'title': news[1],
                                 'publisher': news[-1],
                                 'link': news[2],
-                                'providerPublishTime': news[0],
-                                'title_sentiment_score':
-                                (self.analyzer.polarity_scores(news[1]).values())
+                                'providerPublishTime': news[0]
                                 })
 
         return finviz_news
 
+    def gather_news(self) -> pd.DataFrame:
+        # combine both news source
+        df_finviz = pd.DataFrame.from_dict(self._from_finviz)
+        df_yahoo = pd.DataFrame.from_dict(self._from_yahoo)
+
+        df = pd.concat([df_yahoo, df_finviz], axis=0)
+        df = df.reset_index(drop=True)
+        df['providerPublishTime'] = pd.to_datetime(df['providerPublishTime'],
+                                                   format='%Y-%m-%d').dt.date
+        df.drop_duplicates(subset=['title'], inplace=True)
+
+        return df
+
     def analysts_targets(self) -> pd.DataFrame:
+        # what to do with analyst ratings
         _rating = finviz.get_analyst_price_targets(self.ticker)
         _rating = pd.DataFrame.from_dict(_rating)
 
         return _rating
 
-    def gather_news(self) -> pd.DataFrame:
-        df_yahoo = pd.DataFrame.from_dict(self._from_yahoo)
-        df_finviz = pd.DataFrame.from_dict(self._from_finviz)
-
-        df = pd.concat([df_yahoo, df_finviz], axis=0)
-        df = df.reset_index(drop=True)
-
-        return df
-
 
 if __name__ == '__main__':
-    x = GatherNews('snow').gather_news()
-    print(x)
+    # 'nvda', 'amd', 'snow', 'axp', 'gs', 'intc', 'net', 'msft'
+    None
