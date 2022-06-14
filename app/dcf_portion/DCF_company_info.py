@@ -68,4 +68,4 @@ class CompanyInfo:
 
 
 if __name__ == '__main__':
-    print(CompanyInfo('snow').upload_info_to_bq)
+    print(CompanyInfo('nvda').upload_info_to_bq)

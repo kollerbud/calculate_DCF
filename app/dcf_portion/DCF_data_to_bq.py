@@ -2,23 +2,51 @@ import functools
 import yfinance as yf
 import pandas as pd
 from google.cloud import bigquery
+from dataclasses import dataclass
+from api_keys import FMP, G_KEYS
+import requests
 import os
 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = (
     'app/dcf_portion/hello_google.json')
 
+'''
+to do:
+    yfinance unreliable, will rewrite to pull data from FMP
+'''
 
+
+@dataclass
 class DCF_DATA:
     '''Gather data from yfinance(API) to feed into a discount cash flow(DCF) model
     '''
-    def __init__(self, ticker: str) -> None:
-        self.ticker = str(ticker).upper()
-        self.ticker_check
+    ticker: str
 
-    @property
-    def ticker_check(self):
-        price_info = yf.Ticker(self.ticker).info['regularMarketPrice']
-        if price_info is None:
-            raise ValueError('invalid ticker')
+    def __post_init__(self):
+        self.ticker = str(self.ticker).upper()
+
+    def statements(self, statement):
+        # pick statement
+        if statement == 'income':
+            link = 'https://financialmodelingprep.com/api/v3/'\
+                   'income-statement/'\
+                   f'{self.ticker}?limit=120&apikey={FMP.key}'
+        elif statement == 'balance':
+            link = 'https://financialmodelingprep.com/api/v3/'\
+                   'balance-sheet-statement'\
+                   f'/{self.ticker}?limit=120&apikey={FMP.key}'
+        elif statement == 'cashflow':
+            link = 'https://financialmodelingprep.com/api/v3/'\
+                    'cash-flow-statement/'\
+                    f'{self.ticker}?limit=120&apikey={FMP.key}'
+        else:
+            raise ValueError('choose "income", "balance" or "cashflow"')
+        # get response
+        response = requests.get(link)
+        # checck if response is valid
+        if response.status_code != 200:
+            print('response error')
+        # return json
+        return response.json()
 
     @functools.cached_property
     def _income_statement(self) -> pd.DataFrame:
@@ -26,35 +54,36 @@ class DCF_DATA:
         pull income statement from API for a specific company,`
         and cacheing for later use
         '''
-        fin = yf.Ticker(self.ticker).financials
-        fin = fin.T
-        fin['ticker'] = self.ticker
-        fin.reset_index(inplace=True)
-        fin.rename(columns={fin.columns[0]: 'period'}, inplace=True)
-
+        json_response = self.statements(statement='income')
+        fin = pd.DataFrame(
+                json_response
+            )
         # trim some extra columns off
-        keep_cols = ['ticker', 'period', 'Income Before Tax',
-                     'Research Development', 'Net Income',
-                     'Selling General Administrative',
-                     'Gross Profit', 'Interest Expense', 'Operating Income',
-                     'Income Tax Expense', 'Total Revenue', 'Cost Of Revenue']
+        keep_cols = ['symbol', 'date', 'incomeBeforeTax',
+                     'researchAndDevelopmentExpenses', 'netIncome',
+                     'sellingGeneralAndAdministrativeExpenses',
+                     'grossProfit', 'interestExpense', 'operatingIncome',
+                     'incomeTaxExpense', 'revenue', 'costOfRevenue'
+                     ]
         fin = fin[keep_cols]
         fin = fin.fillna(0)
 
-        fin.rename({'period': 'time_period',
-                    'Income Before Tax': 'income_before_tax',
-                    'Research Development': 'research_development',
-                    'Net Income': 'net_income',
-                    'Selling General Administrative': 'sga',
-                    'Gross Profit': 'gross_profit',
-                    'Interest Expense': 'interest_expense',
-                    'Operating Income': 'operating_income',
-                    'Income Tax Expense': 'income_tax_expense',
-                    'Total Revenue': 'total_revenue',
-                    'Cost Of Revenue': 'cost_of_revenue'
+        fin.rename({
+                    'symbol': 'ticker',
+                    'date': 'time_period',
+                    'incomeBeforeTax': 'income_before_tax',
+                    'researchAndDevelopmentExpenses': 'research_development',
+                    'netIncome': 'net_income',
+                    'sellingGeneralAndAdministrativeExpenses': 'sga',
+                    'grossProfit': 'gross_profit',
+                    'interestExpense': 'interest_expense',
+                    'operatingIncome': 'operating_income',
+                    'incomeTaxExpense': 'income_tax_expense',
+                    'revenue': 'total_revenue',
+                    'costOfRevenue': 'cost_of_revenue'
                     },
                    axis=1, inplace=True)
-        fin['period'] = pd.to_datetime(fin['period']).dt.date
+        fin['time_period'] = pd.to_datetime(fin['time_period']).dt.date
 
         return fin
 
@@ -64,12 +93,14 @@ class DCF_DATA:
         pull cash flow statement from API for a specific company,
         and cacheing for later use
         '''
-        cash = yf.Ticker(self.ticker).cashflow
-        cash = cash.T
-        cash['ticker'] = self.ticker
-        cash.reset_index(inplace=True)
-        cash.rename(columns={cash.columns[0]: 'period'}, inplace=True)
-        keep_cols = ['Capital Expenditures', 'Depreciation']
+        json_response = self.statements(statement='cashflow')
+        cash = pd.DataFrame(
+            json_response
+        )
+        keep_cols = ['date', 'symbol',
+                     'capitalExpenditure',
+                     'depreciationAndAmortization',
+                     'changeInWorkingCapital']
         cash = cash[keep_cols]
         cash = cash.fillna(0)
 
@@ -83,13 +114,17 @@ class DCF_DATA:
         pull balance sheet statement from API for a specific company,
         and cacheing for later use
         '''
-        balance = yf.Ticker(self.ticker).balance_sheet
-        balance = balance.T
-        balance['ticker'] = self.ticker
-        balance.reset_index(inplace=True)
-        balance.rename(columns={balance.columns[0]: 'period'}, inplace=True)
-        balance['capex'] = self._cash_flow_statement['Capital Expenditures']
-        balance['depreciation'] = self._cash_flow_statement['Depreciation']
+        json_response = self.statements(statement='balance')
+        balance = pd.DataFrame(
+            json_response
+        )
+        balance['capex'] = self._cash_flow_statement['capitalExpenditure']
+        balance['depreciation'] = (
+            self._cash_flow_statement['depreciationAndAmortization']
+        )
+        balance['changeNWC'] = (
+            self._cash_flow_statement['changeInWorkingCapital']
+            )
         # trim some extra columns off
         if 'Long Term Debt' not in balance.columns:
             balance.loc[:, 'Long Term Debt'] = 0
@@ -98,19 +133,24 @@ class DCF_DATA:
         if 'Long Term Investments' not in balance.columns:
             balance.loc[:, 'Long Term Investments'] = 0
 
-        keep_cols = ['ticker', 'period', 'Long Term Debt',
-                     'Total Stockholder Equity', 'Cash',
-                     'Long Term Investments', 'Short Long Term Debt',
-                     'capex', 'Total Liab', 'Total Assets', 'depreciation'
+        keep_cols = ['symbol', 'date', 'longTermDebt',
+                     'totalStockholdersEquity', 'cashAndCashEquivalents',
+                     'longTermInvestments', 'shortTermDebt',
+                     'capex', 'totalLiabilities', 'totalAssets',
+                     'depreciation', 'changeNWC'
                      ]
         balance = balance[keep_cols]
-        balance.rename({'Long Term Debt': 'long_term_debt',
-                        'Total Stockholder Equity': 'total_stock_holder',
-                        'Cash': 'cash',
-                        'Long Term Investments': 'long_term_invest',
-                        'Short Long Term Debt': 'short_term_debt',
-                        'Total Assets': 'total_asset',
-                        'Total Liab': 'total_liab'
+        balance.rename({
+                        'symbol': 'ticker',
+                        'date': 'period',
+                        'longTermDebt': 'long_term_debt',
+                        'totalStockholdersEquity': 'total_stock_holder',
+                        'cashAndCashEquivalents': 'cash',
+                        'longTermInvestments': 'long_term_invest',
+                        'shortTermDebt': 'short_term_debt',
+                        'totalAssets': 'total_asset',
+                        'totalLiabilities': 'total_liab',
+                        'changeNWC': 'change_in_nwc'
                         },
                        axis=1, inplace=True)
         balance = balance.fillna(0)
@@ -139,7 +179,17 @@ class DCF_DATA:
             schema=[
                 bigquery.SchemaField('ticker', 'STRING'),
                 bigquery.SchemaField('time_period', 'DATE'),
-                bigquery.SchemaField('research_development', 'FLOAT')
+                bigquery.SchemaField('research_development', 'FLOAT'),
+                bigquery.SchemaField('income_before_tax', 'FLOAT'),
+                bigquery.SchemaField('net_income', 'FLOAT'),
+                bigquery.SchemaField('sga', 'FLOAT'),
+                bigquery.SchemaField('gross_profit', 'FLOAT'),
+                bigquery.SchemaField('interest_expense', 'FLOAT'),
+                bigquery.SchemaField('operating_income', 'FLOAT'),
+                bigquery.SchemaField('income_tax_expense', 'FLOAT'),
+                bigquery.SchemaField('total_revenue', 'FLOAT'),
+                bigquery.SchemaField('cost_of_revenue', 'FLOAT'),
+                
             ]
         )
         df_income = self._income_statement
@@ -159,7 +209,17 @@ class DCF_DATA:
             schema=[
                 bigquery.SchemaField('ticker', 'STRING'),
                 bigquery.SchemaField('period', 'DATE'),
-                bigquery.SchemaField('total_stock_holder', 'FLOAT')
+                bigquery.SchemaField('total_stock_holder', 'FLOAT'),
+                bigquery.SchemaField('long_term_debt', 'FLOAT'),
+                bigquery.SchemaField('cash', 'FLOAT'),
+                bigquery.SchemaField('short_term_debt', 'FLOAT'),
+                bigquery.SchemaField('long_term_invest', 'FLOAT'),
+                bigquery.SchemaField('capex', 'FLOAT'),
+                bigquery.SchemaField('total_asset', 'FLOAT'),
+                bigquery.SchemaField('total_liab', 'FLOAT'),
+                bigquery.SchemaField('depreciation', 'float'),
+                bigquery.SchemaField('change_in_nwc', 'float'),
+                
             ]
         )
         df_income = self._balanced_sheet
@@ -171,19 +231,19 @@ class DCF_DATA:
         return f'uploaded {self.ticker} balance sheet'
 
 
-def update_query(capex, date, ticker):
+def update_query(col_value, date, ticker):
     '''
     use to update data when new columns are
     put in the table
     '''
     query_string = '''
         update all_data.balance_sheet
-        set depreciation = ?
+        set capex = ?
         where period = ? and ticker = ?
     '''
     job_configs = bigquery.QueryJobConfig(
         query_parameters=[
-            bigquery.ScalarQueryParameter(None, 'FLOAT', capex),
+            bigquery.ScalarQueryParameter(None, 'FLOAT', col_value),
             bigquery.ScalarQueryParameter(None, 'DATE', date),
             bigquery.ScalarQueryParameter(None, 'STRING', ticker)
         ]
@@ -198,5 +258,18 @@ def update_query(capex, date, ticker):
     print(f'finished {ticker}')
 
 
+def schema_check(check_table):
+    'schema test'
+    client = bigquery.Client()
+    dataset_ref = client.dataset(dataset_id=G_KEYS.dataset, project=G_KEYS.project)
+    table_ref = dataset_ref.table(table_id=check_table)
+    table = client.get_table(table_ref)
+    return [
+        '{0}'.format(
+            schema.name
+        ) for schema in table.schema
+    ]
+    
+
 if __name__ == '__main__':
-    pass
+    #ticker_list = ['sq', 'net', 'amd', 'nvda', 'snow', 'axp', 'msft', 'intc', 'gs', 'abt','qcom', 'mdt']

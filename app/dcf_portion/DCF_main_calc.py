@@ -1,132 +1,220 @@
 from DCF_prelim_calc import DCFDataInput
-from dataclasses import dataclass
+import functools
 
-@dataclass
-class BuildDCF:
+
+class BuildDCF(DCFDataInput):
     '''
-    Input  should be from DcfPrelim
+    inherite input class for cleaner structure, but also means
+    coupling..
+    subclass variable: risk free rate
     put decision making points on the dcf method
-    
-    -input: risk_free_rate after 10 years
-    
     '''
+    def __init__(self, ticker, risk_free_rate):
+        self.risk_free_rate = risk_free_rate
+        super().__init__(ticker=ticker)
 
-    cur_rev: float
-    growth_rate: float
-    ebit_margin: float
-    indus_growth_avg: float
-    tax_rate: float
-    sales_cap: float
-    wacc: float
-    debt: float
-    cash: float
-    shares: float
-    int_rate: float = None
-    growth_taper: float = 0.85
+    @functools.cached_property
+    def growth(self) -> list:
+        '''
+        parameters:
+            none
+        returns:
+            growth rate projection for next 11 years
+        '''
+        rate_first_five = [self.yoy_grwoth_] * 5
+        rate_last_five = [
+            self.yoy_grwoth_-(self.yoy_grwoth_-self.risk_free_rate)/6*n
+            for n in range(1, 7)
+            ]
+        return rate_first_five + rate_last_five
 
     @property
-    def _revenue_projection(self) -> list:
-        # first five year revenue projection
-        first_five = [self.cur_rev*((1+self.growth_rate)**year)
-                      for year in range(1, 6)]
+    def rev_project(self) -> list:
+        '''
+        return
+            list of revenues projection based on growth rate
+        '''
+        rev_projects = []
+        for idx, rate in enumerate(self.growth):
+            if idx == 0:
+                RevProject = self.revenues[0] * (1+rate)
+                rev_projects.append(RevProject)
 
-        # last firve year revenue projection
-        last_five = [self.cur_rev*((
-            1+(self.growth_rate*self.growth_taper))**year)
-                     for year in range(6, 11)]
+            RevProject = RevProject * (1+rate)
+            rev_projects.append(RevProject)
 
-        return first_five + last_five
+        return rev_projects
 
-    def _ebit(self):
-        # make sure list of revenue projection is the input
-        # as percent of revenue
-        rev = self._revenue_projection
+    @property
+    def ebit_project(self) -> list:
+        '''
+        return
+            list ebit projection based on revenues
+        '''
+        avg_ebit_perc = self.operating_margin
+        proj_ebit = [
+            rev*avg_ebit_perc for rev in self.rev_project]
+        return proj_ebit
 
-    def disount_rate(self, int_rate=0, method='wacc'):
+    @property
+    def tax_project(self) -> list:
+        '''
+        return
+            list taxes paid projected based on
+        '''
+        avg_tax_rate = self.tax_rate
+        proj_tax = [
+            ebit*avg_tax_rate
+            for ebit in self.ebit_project
+        ]
+        return proj_tax
 
-        if method == 'wacc':
-            self.int_rate = self.wacc
-            return self.int_rate
+    @property
+    def ebita(self) -> list:
+        '''
+        ebit - tax
+        return
+            ebita numbers
+        '''
+        return [
+            ebit-tax for ebit, tax
+            in zip(self.ebit_project,
+                   self.tax_project)
+        ]
 
-        if method == 'dcf':
-            self.int_rate = int_rate
-            return self.int_rate
+    @property
+    def capex_project(self) -> list:
+        '''
+        capex projection based on renveue
+        return
+            list of capex projections
+        '''
+        return [
+            rev*self.capex
+            for rev in self.rev_project
+        ]
 
-    def prof_model_eval(self, growth_shift):
+    @property
+    def deprec_project(self) -> list:
+        '''
+        '''
+        return [
+            rev*self.depreciation
+            for rev in self.rev_project
+        ]
 
-        # grab revenues
-        revenues = self._revenue_projection(growth_shift=growth_shift)
+    @property
+    def changeNWC(self) -> list:
+        '''
+        change in net working capital based on percentage
+        of revenue
+        return
+            nwc based on revenue
+        '''
+        return [
+            rev*self.nwc
+            for rev in self.rev_project
+        ]
 
-        # EBIT percent over the projection years, converge to indus average
-        ebit_yr_perc = []
-        for year in range(1, 11):
-            ebit_percent = self.indus_growth_avg - ((self.indus_growth_avg -
-                                                     self.ebit_margin) /
-                                                    10*(10-year))
-            ebit_yr_perc.append(ebit_percent)
+    @property
+    def unlevered_cashflow(self) -> list:
+        '''
+        calculations:
+            ebita + depreciation - capex - nwc
+        '''
+        return [
+            ebita+depr-capex-nwc
+            for ebita, depr, capex, nwc
+            in zip(
+                self.ebita,
+                self.deprec_project,
+                self.capex_project,
+                self.changeNWC
+            )
+        ]
 
-        # calculate EBIT every year, after tax
-        ebits = [rev*(1-ebit_perc)*(1-self.tax_rate)
-                 for rev, ebit_perc in zip(revenues, ebit_yr_perc)]
-        # revenue diff for reinvestment calculation
-        revs_diff = [y-x for x, y in zip(revenues, revenues[1:])]
-        reinvestment = [rev/self.sales_cap for rev in revs_diff]
-        reinvestment.append(reinvestment[-1])
+    def wacc(self, market_risk: float = 0.058,
+             avg_notes_int: float = 0.03
+             ) -> list:
+        '''
+        parameter:
+            market_risk: market risk premium, quick google search
+            would get you a 5.8%
+            avg_notes_int: average interest rate of all interest of debt,
+            this one requires digging into balance sheet of the company's
+            report
+        return:
+            A quick calculation of wacc
+            wacc = (%debt * cost_of_debt * (1-tax_rate)) +
+                    (% equity * cost of equity)
+            cost_of_equity = risk free rate + (beta * market risk premium)
+            cost_of_debt = average of debt notes
+        '''
+        beta = self.ticker_info['beta']
+        cost_of_equity = self.risk_free_rate + (beta * market_risk)
+        cost_of_debt = avg_notes_int
+        wacc = (
+            (self.wacc_cal['debt_perc']*cost_of_debt*(1+self.tax_rate)) +
+            (self.wacc_cal['equity_perc']*cost_of_equity)
+        )
+        return wacc
 
-        # free cash flow
-        fcff = [ebit-re_inv for ebit, re_inv in zip(ebits, reinvestment)]
+    def freeCashFlow(self,
+                     market_risk: float = 0.058,
+                     avg_debt_int_rate: float = 0.03,
+                     override_wacc=None) -> list:
+        '''
+        bring everything together, calcualte the present value of unlevered
+        cashflow
+        paramters:
+            market_risk: market risk premium, same as the one used for wacc
+            avg_debt_int_rate: average interest rate of debts, same as for wacc
+            override_wacc: override wacc calculation and use a manual input
+            instead
+        return:
+            a list of present values of free cash flow for predicted 
+        '''
+        if override_wacc is None:
+            wacc_rate = self.wacc(
+                market_risk=market_risk, avg_notes_int=avg_debt_int_rate
+                )
+        else:
+            override_wacc = float(override_wacc)
+            wacc_rate = override_wacc
 
-        # cumulative discount factor
-        int_rate = self.disount_rate(method='wacc')
-        discount_factor = []
-        for i in range(1, 10):
-            if i == 1:
-                discount_factor.append(1/(1+int_rate))
-            discount_factor.append((1/(1+int_rate))**i)
+        # present value of free cash flow
+        # present value = future value / ((1+wacc)^year)
+        unlevered_fcf = self.unlevered_cashflow
+        fcf = []
+        for idx, val in enumerate(unlevered_fcf):
+            fcf.append(
+                val/((1+wacc_rate)**idx)
+            )
+        # terminal value(last one predicted) calculation
+        terminal_value = (
+            unlevered_fcf[-1]*(1+self.growth[-1]) /
+            (wacc_rate-self.growth[-1])
+        )
+        # present value of terminal value
+        pv_of_tv = terminal_value/((1+wacc_rate)**len(fcf))
+        # enterprise value by adding all PVs together
+        ev = sum(fcf) + pv_of_tv
+        # enterprise value plus cash minus debt
+        # equity value
+        eq_v = ev + self.cash_minus_debt
+        shares = self.ticker_info['shares_outstanding']
+        pred_price = eq_v/shares
 
-        # presen value
-        pv = [x*y for x, y in zip(fcff, discount_factor)]
-        print(pv)
-        # terminal value
-        'check present value calculation for terminal value'
-        present_terminal = fcff[-1]/(self.wacc)*discount_factor[-1]
-
-        all_pv_terminal = present_terminal + sum(pv)
-        # value of equity
-        value_of_equity = all_pv_terminal - self.debt + self.cash
-
-        return {'est_stock_price': value_of_equity/self.shares}
-
-    def dcf_model_eval(self, growth_taper):
-        pass
-        
+        return {
+            'fcf_pv': fcf,
+            'price_predicted': pred_price,
+            'wacc used': wacc_rate
+        }
 
 
 if __name__ == '__main__':
-    raw_values = DcfPrelim('amd').input_fileds()
-    print(raw_values)
-
-    dcf_2 = BuildDCF(cur_rev=sum(raw_values['Revenues'])/2,
-                     growth_rate=raw_values['growth_rate'],
-                     ebit_margin=raw_values['oper_margin'],
-                     indus_growth_avg=0.20,
-                     tax_rate=raw_values['EffectiveTax'],
-                     sales_cap=raw_values['sales_to_cap'],
-                     wacc=raw_values['wacc'],
-                     debt=raw_values['BVOD'][0],
-                     cash=raw_values['Cash'][0],
-                     shares=raw_values['Shares'])._revenue_projection
-    print(dcf_2)
-
-
+    t = 'abt'
+    x = BuildDCF(t, risk_free_rate=0.0343)
+    print(x.freeCashFlow(market_risk=0.0523, avg_debt_int_rate=0.027))
 '''
-    @property
-    def wacc(self) -> float:
-
-        A quick calculation of wacc
-        wacc = (%debt * cost_of_debt * (1-tax_rate)) +
-                (% equity * cost of equity)
-        cost_of_equity = risk free rate + (beta * market risk premium)
-        cost_of_debt = average of debt notes
-
 '''

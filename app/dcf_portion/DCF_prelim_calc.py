@@ -48,7 +48,7 @@ class DCFDataInput:
                 SELECT *
                 FROM all_data.income_statement
                 WHERE ticker = ?
-                ORDER BY time_period desc
+                ORDER BY time_period DESC
                 ;
                 '''
         job_configs = bigquery.QueryJobConfig(
@@ -87,7 +87,7 @@ class DCFDataInput:
                 SELECT *
                 FROM all_data.balance_sheet
                 WHERE ticker = ?
-                ORDER BY period desc
+                ORDER BY period DESC
                 ;
                 '''
         job_configs = bigquery.QueryJobConfig(
@@ -111,9 +111,7 @@ class DCFDataInput:
                         'long_term_invest': row['long_term_invest'],
                         'short_term_debt': row['short_term_debt'],
                         'capex': row['capex'],
-                        'net_working_cap': (
-                            row['total_asset'] - row['total_liab']
-                            ),
+                        'changeInNWC': row['change_in_nwc'],
                         'depreciation': row['depreciation']
                         }
             query_results.append(row_dict)
@@ -173,16 +171,25 @@ class DCFDataInput:
                    income in self._income_statement]
         margin = [x/y for y, x in zip(_revs, _op_inc)]
 
-        return margin
+        return mean(margin)
 
     @property
-    def tax_rate(self) -> float:
+    def tax_rate(self) -> list:
         '''
         calculate the average tax rate
         '''
         ebit = self.ebit
         tax = self.taxes
-        return [x/y for x, y in zip(tax, ebit)]
+        return mean(
+            [x/y for x, y in zip(tax, ebit)]
+        )
+
+    @property
+    def report_date(self) -> list:
+        '''
+        return report date
+        '''
+        return [x['date'] for x in self._income_statement]
 
     @property
     def revenues(self) -> list:
@@ -209,24 +216,39 @@ class DCFDataInput:
         return [tax['income_tax_expense'] for tax in self._income_statement]
 
     @property
-    def depreciation(self) -> list:
+    def depreciation(self) -> float:
         '''
-        return list of all depreciation
-
+        return average of all depreciation as perccent
+        of revenue
         '''
-        return [depre['depreciation'] for depre in self._balance_sheet]
+        perc_depre = [
+            x['depreciation']/y for x, y
+            in zip(self._balance_sheet, self.revenues)
+        ]
+        return mean(perc_depre)
 
     @property
     def capex(self) -> list:
         '''
-        return capex
+        return
+            capex as percentage of revenues
         '''
-        return [capx['capex'] for capx in self._balance_sheet]
+        perc_capex = [
+            -x['capex']/y for x, y
+            in zip(self._balance_sheet, self.revenues)
+        ]
+        return mean(perc_capex)
 
     @property
     def nwc(self) -> list:
-        'return net working capital'
-        return [nwc['net_working_cap'] for nwc in self._balance_sheet]
+        '''return
+            net working capital as percent of revenue
+        '''
+        perc_nwc = [
+            x['changeInNWC']/y for x, y
+            in zip(self._balance_sheet, self.revenues)
+        ]
+        return mean(perc_nwc)
 
     @property
     def cash_minus_debt(self) -> float:
@@ -237,10 +259,32 @@ class DCFDataInput:
         return (self._balance_sheet[0]['cash'] -
                 self._balance_sheet[0]['long_term_debt']
                 )
+        
+    @property
+    def wacc_cal(self) -> float:
+        '''
+        '''
+        debt_and_equity = (
+            self._balance_sheet[0]['long_term_debt'] +
+            self._balance_sheet[0]['total_stock_holder']
+        )
+        debt_perc = (
+            self._balance_sheet[0]['long_term_debt'] /
+            debt_and_equity
+            )
+        equity_perc = (
+            self._balance_sheet[0]['total_stock_holder'] /
+            debt_and_equity
+        )
+        return {
+            'debt_perc': debt_perc,
+            'equity_perc': equity_perc
+        }
 
     def input_fileds(self):
         # compile all sections to one method
         return {
+            'report_date': self.report_date,
             'revenues': self.revenues,
             'ebit': self.ebit,
             'taxes': self.taxes,
@@ -255,4 +299,4 @@ class DCFDataInput:
 
 
 if __name__ == '__main__':
-    print(DCFDataInput('sq').input_fileds())
+    print(DCFDataInput('nvda').wacc_cal)
