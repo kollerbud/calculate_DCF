@@ -1,35 +1,48 @@
-from DCF_prelim_calc import DCFDataInput
+from __future__ import absolute_import
+from app.dcf_portion.DCF_prelim import DCFDataInput
 import functools
 
 
 class BuildDCF(DCFDataInput):
     '''
-    inherite input class for cleaner structure, but also means
-    coupling..
-    subclass variable: risk free rate
-    put decision making points on the dcf method
+
     '''
-    def __init__(self, ticker, risk_free_rate):
+
+    def __init__(self,
+                 ticker: str,
+                 risk_free_rate: float = 0.0261,
+                 market_risk_prem: float = 0.0523,
+                 avg_debt_int: float = 0.0232):
+        '''
+        class parameters:
+        risk_free_rate: expected rate of return that have 0 risk, usually
+            treasury bill
+        market_risk_prem: market risk premium, difference between expected
+            return on a market and the risk-free rate
+        avg_debt_int: average interest rate of debt for a given company
+        '''
         self.risk_free_rate = risk_free_rate
+        self.market_risk = market_risk_prem
+        self.avg_debt_int = avg_debt_int
         super().__init__(ticker=ticker)
 
     @functools.cached_property
-    def growth(self) -> list:
+    def growth(self) -> list[float]:
         '''
         parameters:
             none
         returns:
             growth rate projection for next 11 years
         '''
-        rate_first_five = [self.yoy_grwoth_] * 5
+
         rate_last_five = [
-            self.yoy_grwoth_-(self.yoy_grwoth_-self.risk_free_rate)/6*n
-            for n in range(1, 7)
+            self.yoy_grwoth_-(self.yoy_grwoth_-self.risk_free_rate)/10*n
+            for n in range(1, 11)
             ]
-        return rate_first_five + rate_last_five
+        return rate_last_five
 
     @property
-    def rev_project(self) -> list:
+    def rev_project(self) -> list[float]:
         '''
         return
             list of revenues projection based on growth rate
@@ -46,7 +59,7 @@ class BuildDCF(DCFDataInput):
         return rev_projects
 
     @property
-    def ebit_project(self) -> list:
+    def ebit_project(self) -> list[float]:
         '''
         return
             list ebit projection based on revenues
@@ -57,7 +70,7 @@ class BuildDCF(DCFDataInput):
         return proj_ebit
 
     @property
-    def tax_project(self) -> list:
+    def tax_project(self) -> list[float]:
         '''
         return
             list taxes paid projected based on
@@ -70,7 +83,7 @@ class BuildDCF(DCFDataInput):
         return proj_tax
 
     @property
-    def ebita(self) -> list:
+    def ebita(self) -> list[float]:
         '''
         ebit - tax
         return
@@ -83,7 +96,7 @@ class BuildDCF(DCFDataInput):
         ]
 
     @property
-    def capex_project(self) -> list:
+    def capex_project(self) -> list[float]:
         '''
         capex projection based on renveue
         return
@@ -95,7 +108,7 @@ class BuildDCF(DCFDataInput):
         ]
 
     @property
-    def deprec_project(self) -> list:
+    def deprec_project(self) -> list[float]:
         '''
         '''
         return [
@@ -104,7 +117,7 @@ class BuildDCF(DCFDataInput):
         ]
 
     @property
-    def changeNWC(self) -> list:
+    def changeNWC(self) -> list[float]:
         '''
         change in net working capital based on percentage
         of revenue
@@ -117,7 +130,7 @@ class BuildDCF(DCFDataInput):
         ]
 
     @property
-    def unlevered_cashflow(self) -> list:
+    def unlevered_cashflow(self) -> list[float]:
         '''
         calculations:
             ebita + depreciation - capex - nwc
@@ -133,9 +146,8 @@ class BuildDCF(DCFDataInput):
             )
         ]
 
-    def wacc(self, market_risk: float = 0.058,
-             avg_notes_int: float = 0.03
-             ) -> list:
+    @property
+    def wacc(self) -> float:
         '''
         parameter:
             market_risk: market risk premium, quick google search
@@ -151,18 +163,16 @@ class BuildDCF(DCFDataInput):
             cost_of_debt = average of debt notes
         '''
         beta = self.ticker_info['beta']
-        cost_of_equity = self.risk_free_rate + (beta * market_risk)
-        cost_of_debt = avg_notes_int
+        cost_of_equity = self.risk_free_rate + (beta * self.market_risk)
+        cost_of_debt = self.avg_debt_int
         wacc = (
-            (self.wacc_cal['debt_perc']*cost_of_debt*(1+self.tax_rate)) +
+            (self.wacc_cal['debt_perc']*cost_of_debt*(1-self.tax_rate)) +
             (self.wacc_cal['equity_perc']*cost_of_equity)
         )
         return wacc
 
     def freeCashFlow(self,
-                     market_risk: float = 0.058,
-                     avg_debt_int_rate: float = 0.03,
-                     override_wacc=None) -> list:
+                     override_wacc='No') -> list[float]:
         '''
         bring everything together, calcualte the present value of unlevered
         cashflow
@@ -172,12 +182,10 @@ class BuildDCF(DCFDataInput):
             override_wacc: override wacc calculation and use a manual input
             instead
         return:
-            a list of present values of free cash flow for predicted 
+            a list of present values of free cash flow for predicted
         '''
-        if override_wacc is None:
-            wacc_rate = self.wacc(
-                market_risk=market_risk, avg_notes_int=avg_debt_int_rate
-                )
+        if override_wacc == 'No':
+            wacc_rate = self.wacc
         else:
             override_wacc = float(override_wacc)
             wacc_rate = override_wacc
@@ -206,15 +214,34 @@ class BuildDCF(DCFDataInput):
         pred_price = eq_v/shares
 
         return {
-            'fcf_pv': fcf,
-            'price_predicted': pred_price,
-            'wacc used': wacc_rate
+            'discountFCF': fcf,
+            'pred_price': [pred_price],
+            'wacc_used': [wacc_rate]
+        }
+
+    def dcf_output(self):
+        '''
+        combine everything together, just before final 
+        calculation
+        '''
+        return {
+            'growth_rates': [0] + self.growth,
+            'revenue_proj': self.rev_project,
+            'EBIT_proj': self.ebit_project,
+            'Taxes_proj': self.tax_project,
+            'Depreciation_proj': self.deprec_project,
+            'Capex_proj': self.capex_project,
+            'netChangeCap_proj': self.changeNWC,
+            'unLeveredFreeCash': self.unlevered_cashflow
         }
 
 
 if __name__ == '__main__':
     t = 'abt'
-    x = BuildDCF(t, risk_free_rate=0.0343)
-    print(x.freeCashFlow(market_risk=0.0523, avg_debt_int_rate=0.027))
-'''
-'''
+    x = BuildDCF(t,
+                 risk_free_rate=0.0261,
+                 market_risk_prem=0.0523,
+                 avg_debt_int=0.0232
+                 )
+    print(t)
+    print(x.freeCashFlow())

@@ -3,9 +3,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from google.cloud import bigquery
 import pandas as pd
-import os
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = (
-    'app/dcf_portion/hello_google.json')
 
 
 @dataclass
@@ -68,4 +65,4 @@ class CompanyInfo:
 
 
 if __name__ == '__main__':
-    print(CompanyInfo('nvda').upload_info_to_bq)
+    print(CompanyInfo('mdt').upload_info_to_bq)

@@ -24,6 +24,7 @@ def upload_news_to_bq(ticker):
         job = client.load_table_from_dataframe(
             df_data, table_id, job_config=job_config)
         print(f'finish {t}')
+        job.result()
 
 
 def upload_reddit_to_bq(ticker):
@@ -45,10 +46,12 @@ def upload_reddit_to_bq(ticker):
                 table_id,
                 job_config=job_config
                  )
+        job.result()
         print(f'reddit said {t}')
 
 
 if __name__ == '__main__':
     # 'nvda', 'amd', 'snow', 'axp', 'gs', 'intc', 'net', 'msft'
-    ticker_list = ['nvda', 'amd', 'snow', 'axp', 'gs', 'intc', 'net', 'msft']
+    ticker_list = ['sq', 'net', 'amd', 'nvda', 'snow', 'axp', 'msft', 'intc', 'gs', 'abt','qcom', 'mdt']
+    upload_news_to_bq(ticker=ticker_list)
     upload_reddit_to_bq(ticker=ticker_list)

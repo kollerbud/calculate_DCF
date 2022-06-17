@@ -2,9 +2,6 @@ from statistics import mean
 import functools
 from dataclasses import dataclass
 from google.cloud import bigquery
-import os
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'app/dcf_portion/'\
-                                               'hello_google.json'
 
 
 @dataclass

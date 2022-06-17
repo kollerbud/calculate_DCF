@@ -1,13 +1,12 @@
+from __future__ import absolute_import
 import functools
 import yfinance as yf
 import pandas as pd
 from google.cloud import bigquery
 from dataclasses import dataclass
 from api_keys import FMP, G_KEYS
+from app.dcf_portion.DCF_company_info import CompanyInfo
 import requests
-import os
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = (
-    'app/dcf_portion/hello_google.json')
 
 '''
 to do:
@@ -273,3 +272,7 @@ def schema_check(check_table):
 
 if __name__ == '__main__':
     #ticker_list = ['sq', 'net', 'amd', 'nvda', 'snow', 'axp', 'msft', 'intc', 'gs', 'abt','qcom', 'mdt']
+    ticker = 'txn'
+    print(DCF_DATA(ticker=ticker).upload_incomeStatement)
+    print(DCF_DATA(ticker=ticker).upload_balanceSheet)
+    CompanyInfo(ticker= ticker).upload_info_to_bq
