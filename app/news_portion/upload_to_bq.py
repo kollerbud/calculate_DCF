@@ -2,8 +2,6 @@ from news_scraper import GatherNews
 from reddit_scraper import GatherReddit
 from google.cloud import bigquery
 import time
-import os
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'app/dcf_portion/hello_google.json'
 
 
 def upload_news_to_bq(ticker):

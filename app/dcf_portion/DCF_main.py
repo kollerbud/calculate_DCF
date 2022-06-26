@@ -237,11 +237,12 @@ class BuildDCF(DCFDataInput):
 
 
 if __name__ == '__main__':
-    t = 'abt'
+    t = 'SQ'
     x = BuildDCF(t,
-                 risk_free_rate=0.0261,
-                 market_risk_prem=0.0523,
-                 avg_debt_int=0.0232
+                 risk_free_rate=0.0285,
+                 market_risk_prem=0.0383,
+                 avg_debt_int=0.10,
                  )
     print(t)
-    print(x.freeCashFlow())
+    print(x.freeCashFlow(override_wacc="No"))
+    print(x.growth)

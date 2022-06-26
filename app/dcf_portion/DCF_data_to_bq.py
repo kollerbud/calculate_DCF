@@ -133,7 +133,7 @@ class DCF_DATA:
             balance.loc[:, 'Long Term Investments'] = 0
 
         keep_cols = ['symbol', 'date', 'longTermDebt',
-                     'totalStockholdersEquity', 'cashAndCashEquivalents',
+                     'totalStockholdersEquity', 'cashAndShortTermInvestments',
                      'longTermInvestments', 'shortTermDebt',
                      'capex', 'totalLiabilities', 'totalAssets',
                      'depreciation', 'changeNWC'
@@ -144,7 +144,7 @@ class DCF_DATA:
                         'date': 'period',
                         'longTermDebt': 'long_term_debt',
                         'totalStockholdersEquity': 'total_stock_holder',
-                        'cashAndCashEquivalents': 'cash',
+                        'cashAndShortTermInvestments': 'cash',
                         'longTermInvestments': 'long_term_invest',
                         'shortTermDebt': 'short_term_debt',
                         'totalAssets': 'total_asset',
@@ -237,7 +237,7 @@ def update_query(col_value, date, ticker):
     '''
     query_string = '''
         update all_data.balance_sheet
-        set capex = ?
+        set cash = ?
         where period = ? and ticker = ?
     '''
     job_configs = bigquery.QueryJobConfig(
@@ -271,8 +271,18 @@ def schema_check(check_table):
     
 
 if __name__ == '__main__':
+
+    
     #ticker_list = ['sq', 'net', 'amd', 'nvda', 'snow', 'axp', 'msft', 'intc', 'gs', 'abt','qcom', 'mdt']
-    ticker = 'txn'
-    print(DCF_DATA(ticker=ticker).upload_incomeStatement)
-    print(DCF_DATA(ticker=ticker).upload_balanceSheet)
-    CompanyInfo(ticker= ticker).upload_info_to_bq
+    ticker_list = ['txn', 'mu', 'on']
+    for t in ticker_list:
+        t = t.upper()
+        
+        for i in DCF_DATA(ticker=t).statements('balance'):
+            update_query(col_value=i['cashAndShortTermInvestments'],
+                         date=i['date'],
+                         ticker=t
+                         )
+
+    
+    #print(DCF_DATA('NVDA').statements('balance'))
