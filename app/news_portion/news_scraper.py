@@ -2,6 +2,7 @@ import yfinance as yf
 import finviz
 import pandas as pd
 from datetime import datetime
+from app.news_portion.ticker_list import get_list_of_ticker
 
 
 class GatherNews:
@@ -47,10 +48,10 @@ class GatherNews:
     def gather_news(self) -> pd.DataFrame:
         # combine both news source
         df_finviz = pd.DataFrame.from_dict(self._from_finviz)
-        df_yahoo = pd.DataFrame.from_dict(self._from_yahoo)
+        #df_yahoo = pd.DataFrame.from_dict(self._from_yahoo)
 
-        df = pd.concat([df_yahoo, df_finviz], axis=0)
-        df = df.reset_index(drop=True)
+        #df = pd.concat([df_yahoo, df_finviz], axis=0)
+        df = df_finviz
         df['providerPublishTime'] = pd.to_datetime(df['providerPublishTime'],
                                                    format='%Y-%m-%d').dt.date
         df.drop_duplicates(subset=['title'], inplace=True)
@@ -67,4 +68,5 @@ class GatherNews:
 
 if __name__ == '__main__':
     # 'nvda', 'amd', 'snow', 'axp', 'gs', 'intc', 'net', 'msft'
-    None
+    #icker_list = get_list_of_ticker()
+   print(GatherNews(ticker='nvda').analysts_targets())
