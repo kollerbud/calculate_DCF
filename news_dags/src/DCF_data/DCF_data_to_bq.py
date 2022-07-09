@@ -1,11 +1,9 @@
-
 import functools
 import yfinance as yf
 import pandas as pd
 from google.cloud import bigquery
 from dataclasses import dataclass
 from api_keys import FMP, G_KEYS
-from DCF_company_info import CompanyInfo
 import requests
 
 '''
@@ -218,7 +216,6 @@ class DCF_DATA:
                 bigquery.SchemaField('total_liab', 'FLOAT'),
                 bigquery.SchemaField('depreciation', 'float'),
                 bigquery.SchemaField('change_in_nwc', 'float'),
-                
             ]
         )
         df_income = self._balanced_sheet
@@ -268,7 +265,7 @@ def schema_check(check_table):
             schema.name
         ) for schema in table.schema
     ]
-    
+
 
 if __name__ == '__main__':
     None

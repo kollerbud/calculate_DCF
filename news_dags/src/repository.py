@@ -1,5 +1,5 @@
 from dagster import repository
-from news_dags.news_dags.jobs.news_jobs import(
+from DCF_data.jobs.news_jobs import (
     company_news_pipeline
 )
 
@@ -13,7 +13,11 @@ def news_dags():
     '''
 
     jobs = [company_news_pipeline]
-    #chedules = [my_hourly_schedule]
-    #sensors = [my_sensor]
+    # chedules = [my_hourly_schedule]
+    # sensors = [my_sensor]
 
     return jobs
+
+
+if __name__ == '__main__':
+    None

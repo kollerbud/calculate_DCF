@@ -1,9 +1,8 @@
-from __future__ import absolute_import
 import yfinance as yf
 import finviz
 import pandas as pd
 from datetime import datetime
-from news_dags.DCF_data.news_sentiment import NewsSentiment
+from DCF_data.news_sentiment import NewsSentiment
 
 
 class GatherNews:
@@ -52,9 +51,8 @@ class GatherNews:
     def gather_news(self) -> pd.DataFrame:
         # combine both news source
         df_finviz = pd.DataFrame.from_dict(self._from_finviz)
-        #df_yahoo = pd.DataFrame.from_dict(self._from_yahoo)
-
-        #df = pd.concat([df_yahoo, df_finviz], axis=0)
+        # df_yahoo = pd.DataFrame.from_dict(self._from_yahoo)
+        # df = pd.concat([df_yahoo, df_finviz], axis=0)
         df = df_finviz
         df['providerPublishTime'] = pd.to_datetime(df['providerPublishTime'],
                                                    format='%Y-%m-%d').dt.date

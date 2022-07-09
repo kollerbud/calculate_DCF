@@ -1,0 +1,9 @@
+dagit
+dagster
+pandas
+yfinance
+google-cloud
+requests
+finviz @ git+https://github.com/mariostoev/finviz@c97173ab8e836acabf2b629102a447a906550c7c
+vaderSentiment
+praw

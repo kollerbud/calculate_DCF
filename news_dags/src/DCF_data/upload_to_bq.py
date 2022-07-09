@@ -1,5 +1,5 @@
-from news_dags.DCF_data.news_scraper import GatherNews
-from news_dags.DCF_data.reddit_scraper import GatherReddit
+from DCF_data.news_scraper import GatherNews
+from DCF_data.reddit_scraper import GatherReddit
 from google.cloud import bigquery
 import time
 
@@ -51,7 +51,8 @@ def upload_reddit_to_bq(ticker):
 
 
 if __name__ == '__main__':
+    None
     # 'nvda', 'amd', 'snow', 'axp', 'gs', 'intc', 'net', 'msft'
-    ticker_list = ['sq']
-    upload_news_to_bq(ticker=ticker_list)
+    #ticker_list = ['sq']
+    #upload_news_to_bq(ticker=ticker_list)
     #upload_reddit_to_bq(ticker=ticker_list)
