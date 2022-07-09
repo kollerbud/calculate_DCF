@@ -1,8 +1,9 @@
+from __future__ import absolute_import
 import yfinance as yf
 import finviz
 import pandas as pd
 from datetime import datetime
-from app.news_portion.ticker_list import get_list_of_ticker
+from news_dags.DCF_data.news_sentiment import NewsSentiment
 
 
 class GatherNews:
@@ -35,13 +36,16 @@ class GatherNews:
         '''
         finviz_news = []
         for news in finviz.get_news(self.ticker)[:20]:
+            analyzed = NewsSentiment(link=news[2]).analysis()
             finviz_news.append({
-                                'ticker': self.ticker,
-                                'title': news[1],
-                                'publisher': news[-1],
-                                'link': news[2],
-                                'providerPublishTime': news[0]
-                                })
+                'ticker': self.ticker,
+                'title': news[1],
+                'publisher': news[-1],
+                'link': news[2],
+                'providerPublishTime': news[0],
+                'news_sentiment': analyzed['score'],
+                'newsText': analyzed['textBody']
+            })
 
         return finviz_news
 
@@ -69,4 +73,4 @@ class GatherNews:
 if __name__ == '__main__':
     # 'nvda', 'amd', 'snow', 'axp', 'gs', 'intc', 'net', 'msft'
     #icker_list = get_list_of_ticker()
-   print(GatherNews(ticker='nvda').analysts_targets())
+   print(GatherNews(ticker='amd').gather_news())

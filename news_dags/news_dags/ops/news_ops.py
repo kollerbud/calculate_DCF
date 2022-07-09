@@ -1,9 +1,9 @@
-from __future__ import absolute_import
 from dagster import op
 from typing import List
 import pandas as pd
-from app.news_portion.ticker_list import get_list_of_ticker
-from app.news_portion.news_scraper import GatherNews
+from news_dags.DCF_data.ticker_list import get_list_of_ticker
+from news_dags.DCF_data.news_scraper import GatherNews
+from news_dags.DCF_data import upload_to_bq
 
 
 @op(
@@ -26,7 +26,7 @@ def gather_news(context, ticker_list: List) -> pd.DataFrame:
         context.log.info(f'tickers news pulled {ticker}')
         df_gather = GatherNews(ticker=ticker).gather_news()
         df_news = pd.concat([df_news, df_gather])     
-    
+
     return df_news   
 
 
@@ -41,4 +41,10 @@ def gather_analyst_targets(context):
     description='download news to a csv file'
 )
 def news_to_csv(context, df: pd.DataFrame) -> None:
-    df.to_csv('news.csv')
+    df.to_csv('news.csv', index=None)
+
+@op(
+    description='upload to Bigquery'
+)
+def news_to_bq(context, tickers: list[str]) -> None:
+    upload_to_bq.upload_news_to_bq(ticker=tickers)

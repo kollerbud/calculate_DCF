@@ -1,5 +1,5 @@
-from news_scraper import GatherNews
-from reddit_scraper import GatherReddit
+from news_dags.DCF_data.news_scraper import GatherNews
+from news_dags.DCF_data.reddit_scraper import GatherReddit
 from google.cloud import bigquery
 import time
 
@@ -13,12 +13,13 @@ def upload_news_to_bq(ticker):
                 bigquery.SchemaField('title', 'STRING'),
                 bigquery.SchemaField('publisher', 'STRING'),
                 bigquery.SchemaField('link', 'STRING'),
-                bigquery.SchemaField('providerPublishTime', 'DATE')
+                bigquery.SchemaField('providerPublishTime', 'DATE'),
+                bigquery.SchemaField('textSentiment', 'STRING'),
+                bigquery.SchemaField('newsText', 'STRING'),
                 ]
     )
     for t in ticker:
         df_data = GatherNews(ticker=t).gather_news()
-        time.sleep(1)
         job = client.load_table_from_dataframe(
             df_data, table_id, job_config=job_config)
         print(f'finish {t}')
@@ -33,7 +34,8 @@ def upload_reddit_to_bq(ticker):
             bigquery.SchemaField('ticker', 'STRING'),
             bigquery.SchemaField('title', 'STRING'),
             bigquery.SchemaField('upvotes', 'INTEGER'),
-            bigquery.SchemaField('link', 'STRING')
+            bigquery.SchemaField('link', 'STRING'),
+
             ]
     )
     for t in ticker:
@@ -50,6 +52,6 @@ def upload_reddit_to_bq(ticker):
 
 if __name__ == '__main__':
     # 'nvda', 'amd', 'snow', 'axp', 'gs', 'intc', 'net', 'msft'
-    ticker_list = ['sq', 'net', 'amd', 'nvda', 'snow', 'axp', 'msft', 'intc', 'gs', 'abt','qcom', 'mdt']
+    ticker_list = ['sq']
     upload_news_to_bq(ticker=ticker_list)
-    upload_reddit_to_bq(ticker=ticker_list)
+    #upload_reddit_to_bq(ticker=ticker_list)

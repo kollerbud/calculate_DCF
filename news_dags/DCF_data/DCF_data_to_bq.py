@@ -1,11 +1,11 @@
-from __future__ import absolute_import
+
 import functools
 import yfinance as yf
 import pandas as pd
 from google.cloud import bigquery
 from dataclasses import dataclass
 from api_keys import FMP, G_KEYS
-from app.dcf_portion.DCF_company_info import CompanyInfo
+from DCF_company_info import CompanyInfo
 import requests
 
 '''
@@ -271,18 +271,18 @@ def schema_check(check_table):
     
 
 if __name__ == '__main__':
-
+    None
     
     #ticker_list = ['sq', 'net', 'amd', 'nvda', 'snow', 'axp', 'msft', 'intc', 'gs', 'abt','qcom', 'mdt']
-    ticker_list = ['txn', 'mu', 'on']
-    for t in ticker_list:
-        t = t.upper()
-        
-        for i in DCF_DATA(ticker=t).statements('balance'):
-            update_query(col_value=i['cashAndShortTermInvestments'],
-                         date=i['date'],
-                         ticker=t
-                         )
+    #ticker_list = ['txn', 'mu', 'on']
+    #for t in ticker_list:
+    #    t = t.upper()
+    #    
+    #    for i in DCF_DATA(ticker=t).statements('balance'):
+    #        update_query(col_value=i['cashAndShortTermInvestments'],
+    #                     date=i['date'],
+    #                     ticker=t
+    #                     )
 
     
     #print(DCF_DATA('NVDA').statements('balance'))

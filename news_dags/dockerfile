@@ -1,0 +1,19 @@
+FROM python:3.9
+
+WORKDIR /news_dags
+
+RUN pip install dagit dagster
+
+# Copy your code and workspace to /opt/dagster/app
+COPY . /news_dags/
+
+ENV PYTHONPATH=/news_dags
+ENV DAGSTER_HOME=/news_dags/
+
+# Copy dagster instance YAML to $DAGSTER_HOME
+
+EXPOSE 3000
+
+CMD ["apt-get update"]
+CMD ["apt-get install nano"]
+ENTRYPOINT ["dagit", "-f", "news_dags/repository.py"]

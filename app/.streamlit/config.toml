@@ -1,0 +1,10 @@
+[browser]
+gatherUsageStats = false
+
+[client]
+showErrorDetails= false
+
+[theme]
+#theme primary
+base="dark"
+

@@ -4,6 +4,7 @@ from news_dags.news_dags.ops.news_ops import (
     company_ticker,
     gather_news,
     news_to_csv,
+    news_to_bq,
 )
 
 
@@ -15,7 +16,9 @@ def company_news_pipeline():
     news = gather_news(tickers)
     # download as csv
     as_csv = news_to_csv(news)
-
+    # upload to Bigquery
+    #to_bq = news_to_bq(tickers)
 
 if __name__ == '__main__':
-    company_news_pipeline.execute_in_process()
+    None
+    #company_news_pipeline.execute_in_process()

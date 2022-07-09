@@ -1,5 +1,5 @@
 import praw
-from app.dcf_portion.api_keys import REDDIT_API_KEYS
+from news_dags.DCF_data.api_keys import REDDIT_API_KEYS
 import pandas as pd
 
 

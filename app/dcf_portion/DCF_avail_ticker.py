@@ -1,7 +1,4 @@
 from google.cloud import bigquery
-import os
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = (
-    'app/dcf_portion/hello_google.json')
 
 
 def available_ticker():

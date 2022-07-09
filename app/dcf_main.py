@@ -6,10 +6,12 @@ from dcf_portion.DCF_main import BuildDCF
 from dcf_portion.DCF_avail_ticker import available_ticker
 from datetime import datetime
 
-st.write('''
-# my first app
-hello *world!*
-''')
+st.title(
+    '''
+    Build a quick DCF Model, for FUN
+    '''
+
+)
 
 avail_tickers = available_ticker()
 _ticker = st.selectbox(
