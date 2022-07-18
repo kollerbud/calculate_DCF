@@ -65,4 +65,4 @@ class CompanyInfo:
 
 
 if __name__ == '__main__':
-    print(CompanyInfo('mdt').info)
+    CompanyInfo('TSM').upload_info_to_bq

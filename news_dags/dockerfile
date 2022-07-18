@@ -15,5 +15,4 @@ ENV DAGSTER_HOME=/news_dags/
 
 # Copy dagster instance YAML to $DAGSTER_HOME
 
-EXPOSE 3000
-
+EXPOSE 8080

@@ -3,7 +3,9 @@ from typing import List
 import pandas as pd
 from DCF_data.ticker_list import get_list_of_ticker
 from DCF_data.news_scraper import GatherNews
-from DCF_data import upload_to_bq
+from DCF_data import upload_to_bucket
+from datetime import datetime
+import os
 
 
 @op(
@@ -41,11 +43,17 @@ def gather_analyst_targets(context):
     description='download news to a csv file'
 )
 def news_to_csv(context, df: pd.DataFrame) -> None:
-    df.to_csv('news.csv', index=None)
+    today = datetime.today().date().strftime('%m-%d-%Y')
+    save_to_path = os.getcwd()
+    df.to_csv(f'{save_to_path}/news_{today}.csv', index=None)
+    context.log.info(os.getcwd())
 
+    return save_to_path
 
 @op(
-    description='upload to Bigquery'
+    description='upload to google cloud bucket'
 )
-def news_to_bq(context, tickers: list[str]) -> None:
-    upload_to_bq.upload_news_to_bq(ticker=tickers)
+def news_to_bucket(context, empty_) -> None:
+    empty_ = None
+    upload = upload_to_bucket.upload_news_to_bq
+    upload(bucket_name='dcf_news_bucket')

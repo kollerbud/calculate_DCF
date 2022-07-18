@@ -186,7 +186,6 @@ class DCF_DATA:
                 bigquery.SchemaField('income_tax_expense', 'FLOAT'),
                 bigquery.SchemaField('total_revenue', 'FLOAT'),
                 bigquery.SchemaField('cost_of_revenue', 'FLOAT'),
-                
             ]
         )
         df_income = self._income_statement
@@ -268,8 +267,8 @@ def schema_check(check_table):
 
 
 if __name__ == '__main__':
-    None
-    
+    DCF_DATA('TSM').upload_incomeStatement
+    DCF_DATA('TSM').upload_balanceSheet
     #ticker_list = ['sq', 'net', 'amd', 'nvda', 'snow', 'axp', 'msft', 'intc', 'gs', 'abt','qcom', 'mdt']
     #ticker_list = ['txn', 'mu', 'on']
     #for t in ticker_list:

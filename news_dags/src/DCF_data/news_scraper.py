@@ -42,7 +42,7 @@ class GatherNews:
                 'publisher': news[-1],
                 'link': news[2],
                 'providerPublishTime': news[0],
-                'news_sentiment': analyzed['score'],
+                'textSentiment': analyzed['score'],
                 'newsText': analyzed['textBody']
             })
 
@@ -50,7 +50,9 @@ class GatherNews:
 
     def gather_news(self) -> pd.DataFrame:
         # combine both news source
+
         df_finviz = pd.DataFrame.from_dict(self._from_finviz)
+
         # df_yahoo = pd.DataFrame.from_dict(self._from_yahoo)
         # df = pd.concat([df_yahoo, df_finviz], axis=0)
         df = df_finviz
@@ -70,5 +72,5 @@ class GatherNews:
 
 if __name__ == '__main__':
     # 'nvda', 'amd', 'snow', 'axp', 'gs', 'intc', 'net', 'msft'
-    #icker_list = get_list_of_ticker()
+    # icker_list = get_list_of_ticker()
    print(GatherNews(ticker='amd').gather_news())

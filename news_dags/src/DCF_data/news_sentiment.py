@@ -78,7 +78,7 @@ class NewsSentiment:
             return {
                 'textBody': None,
                 'score': [('neg', 0), ('neu', 0),
-                                    ('pos', 0), ('compound', 0)]
+                          ('pos', 0), ('compound', 0)]
             }
 
 if __name__ == '__main__':

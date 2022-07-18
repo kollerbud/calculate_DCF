@@ -10,3 +10,9 @@ def test_hello():
     """
 
     assert hello() == "Hello, Dagster!"
+
+
+'''
+- test output schema and table schema 
+
+'''
