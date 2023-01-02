@@ -115,19 +115,20 @@ class BuildDCF(DCFDataInput):
             rev*self.depreciation
             for rev in self.rev_project
         ]
-
+    '''
     @property
     def changeNWC(self) -> list[float]:
-        '''
-        change in net working capital based on percentage
-        of revenue
-        return
-            nwc based on revenue
-        '''
+
+        #change in net working capital based on percentage
+        #of revenue
+        #return
+        #    nwc based on revenue
+
         return [
             rev*self.nwc
             for rev in self.rev_project
         ]
+    '''
 
     @property
     def unlevered_cashflow(self) -> list[float]:
@@ -136,13 +137,12 @@ class BuildDCF(DCFDataInput):
             ebita + depreciation - capex - nwc
         '''
         return [
-            ebita+depr-capex-nwc
-            for ebita, depr, capex, nwc
+            ebita+depr-capex
+            for ebita, depr, capex
             in zip(
                 self.ebita,
                 self.deprec_project,
-                self.capex_project,
-                self.changeNWC
+                self.capex_project
             )
         ]
 
@@ -231,7 +231,6 @@ class BuildDCF(DCFDataInput):
             'Taxes_proj': self.tax_project,
             'Depreciation_proj': self.deprec_project,
             'Capex_proj': self.capex_project,
-            'netChangeCap_proj': self.changeNWC,
             'unLeveredFreeCash': self.unlevered_cashflow
         }
 

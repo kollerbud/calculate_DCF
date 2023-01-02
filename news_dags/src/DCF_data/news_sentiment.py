@@ -33,8 +33,11 @@ class NewsSentiment:
     @property
     def yahoo_news_check(self):
         'check if link is yahoo news'
+        
+        scrape_ready = ['https://finance.yahoo.com/news',
+                        'https://finance.yahoo.com/video']
 
-        if 'https://finance.yahoo.com/news' in self.link:
+        if any(x in self.link for x in scrape_ready):
             return True
         else:
             return False
@@ -77,10 +80,9 @@ class NewsSentiment:
         else:
             return {
                 'textBody': None,
-                'score': [('neg', 0), ('neu', 0),
-                          ('pos', 0), ('compound', 0)]
+                'score': None
             }
 
 if __name__ == '__main__':
-    url = 'https://www.bizjournals.com/dallas/news/2022/06/29/sherman-economic-globitech-globalwafers.html?utm_source=sy&utm_medium=nsyp&utm_campaign=yh'
+    url = 'https://finance.yahoo.com/video/meta-amazon-tesla-stocks-fall-152718526.html'
     print(NewsSentiment(link=url).analysis())

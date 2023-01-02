@@ -267,8 +267,9 @@ def schema_check(check_table):
 
 
 if __name__ == '__main__':
-    DCF_DATA('TSM').upload_incomeStatement
-    DCF_DATA('TSM').upload_balanceSheet
+    #DCF_DATA('TSM').upload_incomeStatement
+    #DCF_DATA('TSM').upload_balanceSheet
+    print(DCF_DATA('MSFT')._cash_flow_statement)
     #ticker_list = ['sq', 'net', 'amd', 'nvda', 'snow', 'axp', 'msft', 'intc', 'gs', 'abt','qcom', 'mdt']
     #ticker_list = ['txn', 'mu', 'on']
     #for t in ticker_list:

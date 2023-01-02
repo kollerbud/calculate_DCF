@@ -59,6 +59,7 @@ class GatherNews:
         df['providerPublishTime'] = pd.to_datetime(df['providerPublishTime'],
                                                    format='%Y-%m-%d').dt.date
         df.drop_duplicates(subset=['title'], inplace=True)
+        df.dropna(subset=['newsText'], inplace=True)
 
         return df
 
