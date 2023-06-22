@@ -2,7 +2,6 @@ notes.txt
 api_keys.py
 save_to_db.py
 Lib/
-*/.vscode/
 Scripts/
 */Scripts/
 filing_files/
