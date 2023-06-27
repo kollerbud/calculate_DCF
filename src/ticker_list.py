@@ -1,4 +1,5 @@
 from google.cloud import bigquery
+from goog_auth import gcp_credentials
 
 
 def get_list_of_ticker():
@@ -10,7 +11,7 @@ def get_list_of_ticker():
                 select Company_ticker
                 from all_data.unique_companies
                 '''
-    client = bigquery.Client()
+    client = bigquery.Client(credentials=gcp_credentials())
     # run query
     query_job = client.query(query=query_str)
     query_job.result()

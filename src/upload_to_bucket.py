@@ -1,8 +1,10 @@
-from google.cloud import storage
 import os
+from google.cloud import storage
+from goog_auth import gcp_credentials
+
 
 def upload_news_to_bq(bucket_name):
-    storage_client = storage.Client()
+    storage_client = storage.Client(credentials=gcp_credentials())
     bucket = storage_client.get_bucket(bucket_name)
 
     csv_files = [filename for filename in os.listdir() if filename.endswith('.csv')]

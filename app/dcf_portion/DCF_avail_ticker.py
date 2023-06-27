@@ -1,6 +1,5 @@
 from google.cloud import bigquery
 
-
 def available_ticker():
     '''
     get a list of avaible ticker for calculation
