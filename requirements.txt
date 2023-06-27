@@ -5,8 +5,10 @@ finvizfinance
 google-cloud-bigquery
 google-cloud-storage
 grpcio-status
+httpx
 pip-chill
 praw
+pyarrow
 python-dotenv
 vadersentiment
 yarl
