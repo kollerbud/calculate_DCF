@@ -2,6 +2,7 @@ aiosignal
 async-timeout
 attrs
 finvizfinance
+functions-framework
 google-cloud-bigquery
 google-cloud-storage
 grpcio-status

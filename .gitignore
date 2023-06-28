@@ -32,7 +32,7 @@ run_info
 
 # custom
 .vscode/
-*.cfg
+pyenv.cfg
 
 
 share/
