@@ -2,7 +2,6 @@
 import os
 import praw
 import pandas as pd
-from datetime import datetime
 from typing import List
 from dotenv import load_dotenv
 from google.cloud import bigquery
@@ -15,8 +14,8 @@ load_dotenv()
 class GatherRedditPosts:
     '''search ticker mentions in subreddits'''
 
-    reddit = praw.Reddit(client_id=os.getenv('reddit_client_id'),
-                         client_secret=os.getenv('reddit_client_secret'),
+    reddit = praw.Reddit(client_id=os.environ.get('reddit_client_id'),
+                         client_secret=os.environ.get('reddit_client_secret'),
                          user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/114.0'
                          )
     reddit.read_only = True
