@@ -4,7 +4,6 @@ from reddit_scraper import GatherRedditPosts
 from ticker_list import get_list_of_ticker
 
 
-@functions_framework.http
 def run(request_send):
     '''don't need any input from trigger'''
     # get a list of tickers to track
