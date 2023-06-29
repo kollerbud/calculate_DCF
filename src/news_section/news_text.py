@@ -30,4 +30,3 @@ class ExtractYahooNewsText:
             news_text += ''
 
         return news_text
-

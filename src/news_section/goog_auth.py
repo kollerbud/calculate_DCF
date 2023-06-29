@@ -24,6 +24,3 @@ def gcp_credentials():
         cred = None
 
     return cred
-
-
-print(bigquery.Client(credentials=gcp_credentials()))
