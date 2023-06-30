@@ -3,9 +3,12 @@ from google.oauth2 import service_account
 from dotenv import load_dotenv
 
 
+load_dotenv()
+
+
 def gcp_credentials():
     '''get authenticate credentials'''
-    load_dotenv()
+
 
     secrets = {}
     for i in ['type', 'project_id', 'private_key_id',
