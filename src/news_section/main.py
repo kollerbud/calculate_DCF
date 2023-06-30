@@ -15,5 +15,3 @@ def run(request_send=None):
         print(f'finished running {ticker}')
 
     return 'runs finished'
-
-run()
