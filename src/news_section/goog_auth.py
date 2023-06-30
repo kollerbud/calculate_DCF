@@ -1,13 +1,12 @@
+'''build GCP authentication strings'''
 import os
-import functions_framework
 from google.oauth2 import service_account
-from google.cloud import bigquery
 from dotenv import load_dotenv
 
 
 load_dotenv()
 
-@functions_framework.http
+
 def gcp_credentials():
     '''get authenticate credentials'''
     try:
@@ -21,6 +20,7 @@ def gcp_credentials():
 
         cred = service_account.Credentials.from_service_account_info(secrets)
     except:
+        '''reset back to default if encountered issues'''
         cred = None
 
     return cred

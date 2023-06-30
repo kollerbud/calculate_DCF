@@ -189,7 +189,3 @@ class GatherFinvizNews:
 
         return f'upload {self.ticker} to news table'
 
-
-if __name__ == '__main__':
-    x = GatherFinvizNews(ticker='tsla')
-    print(x.news_api_output())

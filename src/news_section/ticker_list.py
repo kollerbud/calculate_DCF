@@ -21,5 +21,3 @@ def get_list_of_ticker():
 
     return query_results
 
-if __name__ == '__main__':
-    print(get_list_of_ticker())

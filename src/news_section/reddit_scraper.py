@@ -94,7 +94,3 @@ class GatherRedditPosts:
         )
 
         return f'upload {self.ticker} to reddit table'
-
-
-if __name__ == '__main__':
-    print(GatherRedditPosts(ticker='nvda').upload_to_bigquery())
