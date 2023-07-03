@@ -8,8 +8,8 @@ def get_list_of_ticker():
     '''
 
     query_str = '''
-                select Company_ticker
-                from all_data.unique_companies
+                SELECT DISTINCT ticker
+                from all_data.income_statement
                 '''
     client = bigquery.Client(credentials=gcp_credentials())
     # run query

@@ -229,7 +229,3 @@ def update_query(col_value, date, ticker):
             )
     query_job.result()
     print(f'finished {ticker}')
-
-
-if __name__ == '__main__':
-    print(FinancialsToBigquery(ticker='nvda')._balanced_transform)

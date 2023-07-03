@@ -3,7 +3,6 @@ from datetime import datetime
 from google.cloud import bigquery
 import pandas as pd
 import yfinance as yf
-
 from goog_auth import gcp_credentials
 
 
@@ -54,7 +53,8 @@ class CompanyOverviewInfo:
                 bigquery.SchemaField('shares_outstanding', 'FLOAT'),
                 bigquery.SchemaField('current_date', 'DATE'),
                 bigquery.SchemaField('stock_price', 'FLOAT'),
-                bigquery.SchemaField('ticker', 'STRING')
+                bigquery.SchemaField('ticker', 'STRING'),
+                bigquery.SchemaField('beta', 'FLOAT'),
             ],
         )
 
