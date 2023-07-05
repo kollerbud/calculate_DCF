@@ -1,3 +1,6 @@
+#import sys
+#sys.path +=['../calculate_DCF/app/dcf_portion/',
+#            '../app/dcf_portion/']
 from google.cloud import bigquery
 from goog_auth import gcp_credentials
 

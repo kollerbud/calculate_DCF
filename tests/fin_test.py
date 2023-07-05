@@ -1,8 +1,6 @@
 import sys
-sys.path += ['../calculate_DCF/',
-             '../calculate_DCF/src/finance_section',
-             '../calculate_DCF/src/news_section',
-             ]
+sys.path += ['../calculate_DCF/src',
+             '../calculate_DCF',]
 from src.finance_section.statements_to_bq import FinancialsToBigquery
 
 

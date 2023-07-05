@@ -10,5 +10,6 @@ praw
 pytest
 python-dotenv
 streamlit
+vadersentiment
 yarl
 yfinance

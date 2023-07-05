@@ -17,6 +17,6 @@ def get_list_of_ticker():
     query_job.result()
     query_results = []
     for row in query_job:
-        query_results.append(row['Company_ticker'])
+        query_results.append(row['ticker'])
 
     return query_results

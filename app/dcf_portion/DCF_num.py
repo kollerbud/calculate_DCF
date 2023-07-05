@@ -1,3 +1,5 @@
+#import sys
+#sys.path +=['../app/dcf_portion/']
 from typing import Dict
 from statistics import mean
 import functools
@@ -266,6 +268,11 @@ class DiscountCashFlowRawData:
             'debt_perc': debt_perc,
             'equity_perc': equity_perc
         }
+    
+    @property
+    def earning_per_share(self):
+        return (self._income_statement[-1]['net_income']/
+                self._ticker_info['shares_outstanding'])  
 
     def calculation_numbers(self) -> Dict[list, int]:
         # compile all sections to one method
@@ -285,8 +292,9 @@ class DiscountCashFlowRawData:
             'shares_outstanding': self._ticker_info['shares_outstanding'],
             'debt_perc': self.wacc_cal['debt_perc'],
             'equity_perc': self.wacc_cal['equity_perc'],
+            'eps': self.earning_per_share
         }
 
 
 if __name__ == '__main__':
-    print(DiscountCashFlowRawData(ticker='AMD', years_statement=5).calculation_numbers())
+    print(DiscountCashFlowRawData(ticker='nvda', years_statement=5).calculation_numbers())

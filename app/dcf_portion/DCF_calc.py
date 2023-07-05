@@ -1,8 +1,14 @@
-from DCF_num import DiscountCashFlowRawData
+#import sys
+#sys.path += ['../calculate_DCF/',
+#             '../calculate_DCF/app/'
+#             '../app/dcf_portion/',
+#             '../calculate_DCF/app/dcf_portion/'
+#             ]
 import functools
+from DCF_num import DiscountCashFlowRawData
 
 
-class BuildDCF:
+class BuildDiscountCashFlowModel:
     '''
     '''
 
@@ -217,14 +223,16 @@ class BuildDCF:
             'Depreciation_proj': self.deprec_project,
             'Capex_proj': self.capex_project,
             'unLeveredFreeCash': self.unlevered_cashflow,
+            'eps': self.calc_num['eps']
 
         }
 
 
 if __name__ == '__main__':
-    x = BuildDCF(ticker='tsla',
-                 years_statement=3,
-                 risk_free_rate=0.0381
-                 )
-    print(x.wacc_fcf_curve())
+    x = BuildDiscountCashFlowModel(
+        ticker='nvda',
+        years_statement=3,
+        risk_free_rate=0.0381
+    )
+    #print(x.wacc_fcf_curve())
     print(x.dcf_output())

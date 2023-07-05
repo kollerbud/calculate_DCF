@@ -1,7 +1,14 @@
+import sys
+sys.path += ['../calculate_DCF/',
+             '../calculate_DCF/app/'
+             '../calculate_DCF/app/dcf_portion',
+             ]
 import streamlit as st
 import pandas as pd
 from dcf_portion.DCF_avail_ticker import available_ticker
-from datetime import datetime
+from dcf_portion.DCF_calc import BuildDiscountCashFlowModel
+from dcf_portion.DCF_news import GetNewsAndTitleSentiment
+
 
 st.title(
     '''
@@ -9,60 +16,54 @@ st.title(
     '''
 
 )
+model_ran = False
 
-avail_tickers = available_ticker()
-_ticker = st.selectbox(
-    label='select ticker to calculate dcf',
-    options=avail_tickers
-)
-start = '2022-01-1'
-end = datetime.now().date()
+with st.sidebar:
+    avail_tickers = available_ticker()
+    _ticker = st.selectbox(
+        label='select ticker to calculate dcf',
+        options=avail_tickers
+    )
 
-risk_free = st.text_input(
-    label='enter risk free rate',
-    value=0.0261
-)
-market_prem = st.text_input(
-    label='enter market risk premium',
-    value=0.0523
-)
-avg_debt_int = st.text_input(
-    label='enter company average debt interest rate',
-    value=0.03
-)
-wacc_override = st.text_input(
-    'override wacc calculation with manual wacc?',
-    value='No'
-)
-risk_free = float(risk_free)
-market_prem = float(market_prem)
-avg_debt_int = float(avg_debt_int)
-if wacc_override != 'No':
-    wacc_override = float(wacc_override)
+    risk_free = st.text_input(
+        label='enter risk free rate',
+        value=0.0381
+    )
+    years_used = st.number_input(
+        label='years of financial statments to use',
+        value=4,
+        min_value=2,
+        max_value=10
+    )
+    news_age = st.number_input(
+        label='weeks of news',
+        value=1,
+        min_value=1,
+    )
 
+    risk_free = float(risk_free)
+    years_used = float(years_used)
 
+    if st.button('run model'):
+        model = BuildDiscountCashFlowModel(
+                    ticker=_ticker,
+                    years_statement=years_used,
+                    risk_free_rate=risk_free)
+        model_ran = True
 
-if st.button('calculate'):
-    data = BuildDCF(ticker=_ticker,
-                    risk_free_rate=risk_free,
-                    market_risk_prem=market_prem,
-                    avg_debt_int=avg_debt_int)
-    df_data = pd.DataFrame.from_dict(data.dcf_output())
-    pred_price = data.freeCashFlow(override_wacc=wacc_override)['pred_price']
-    show_wacc = data.freeCashFlow(override_wacc=wacc_override)['wacc_used']
+        _news = GetNewsAndTitleSentiment(ticker=_ticker,
+                                        news_age=news_age)
 
-    st.write(df_data)
-    st.write(pred_price)
-    st.write(show_wacc)
+if model_ran:
+    col_1, col_2 = st.columns([3,2])
+    wacc_price_data = pd.DataFrame(model.wacc_fcf_curve())
+    with col_1:
+        st.line_chart(
+            data=wacc_price_data,
+            x='wacc',
+            y='pred_price'
+            )
+    with col_2:
+        st.dataframe(wacc_price_data)
 
-
-
-
-'''
-One way to do it is to put all your heavy calculations behind an st.button().
-
-if st.button('button'):
-   ... heavy calculations ...
-
-
-'''
+    st.dataframe(_news.sentiment_analysis())
