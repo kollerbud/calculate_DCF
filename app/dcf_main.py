@@ -1,13 +1,10 @@
-import sys
-sys.path += ['../calculate_DCF/',
-             '../calculate_DCF/app/'
-             '../calculate_DCF/app/dcf_portion',
-             ]
+'Streamlit script'
 import streamlit as st
 import pandas as pd
 from dcf_portion.DCF_avail_ticker import available_ticker
 from dcf_portion.DCF_calc import BuildDiscountCashFlowModel
 from dcf_portion.DCF_news import GetNewsAndTitleSentiment
+
 
 
 st.title(

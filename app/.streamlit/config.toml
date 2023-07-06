@@ -8,3 +8,6 @@ showErrorDetails= false
 #theme primary
 base="dark"
 
+[server]
+enableCORS = false
+enableXsrfProtection = false

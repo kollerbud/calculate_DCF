@@ -1,3 +1,5 @@
 import sys
-sys.path +=['../calculate_DCF/app/dcf_portion/',
-            '../app/dcf_portion/']
+from pathlib import Path
+# ../ROOT_DIR/app/dcf_portion
+sys.path += [str(Path(__file__).parent.resolve()),
+            ]
