@@ -1,13 +1,13 @@
 '''using REST API to gather financial informations'''
 import functools
 import pandas as pd
-from google.cloud import bigquery
 import requests
+from google.cloud import bigquery
 from goog_auth import gcp_credentials
 
 
 '''
-major shoutout to https://discountingcashflows.com/
+shoutout to https://discountingcashflows.com/
 '''
 
 
@@ -36,7 +36,7 @@ class FinancialsToBigquery:
         # get response
         agent_header = {
             'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/114.0'
-        }
+            }
         response = requests.get(link, headers=agent_header, timeout=10)
         # checck if response is valid
         if response.status_code != 200:
@@ -229,7 +229,3 @@ def update_query(col_value, date, ticker):
             )
     query_job.result()
     print(f'finished {ticker}')
-
-
-if __name__ == '__main__':
-    print(FinancialsToBigquery(ticker='nvda').balanced_to_bigquery)

@@ -1,13 +1,15 @@
 aiosignal
 async-timeout
-attrs
 finvizfinance
+functions-framework
 google-cloud-bigquery
 grpcio-status
 httpx
 pip-chill
 praw
-pyarrow
+pytest
 python-dotenv
+streamlit
+vadersentiment
 yarl
 yfinance

@@ -1,3 +1,4 @@
+'''main file for cloud function'''
 from news_scraper import GatherYahooNews
 from reddit_scraper import GatherRedditPosts
 from ticker_list import get_list_of_ticker

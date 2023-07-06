@@ -1,5 +1,4 @@
-''''''
-from dataclasses import dataclass
+'''pull overview data of the ticker'''
 from datetime import datetime
 from google.cloud import bigquery
 import pandas as pd
@@ -7,7 +6,6 @@ import yfinance as yf
 from goog_auth import gcp_credentials
 
 
-@dataclass
 class CompanyOverviewInfo:
     '''
     grab company info and some summarized
@@ -17,13 +15,13 @@ class CompanyOverviewInfo:
     for whatever reason json object is impossible to upload
 
     '''
-    ticker: str
 
-    def __post_init__(self):
-        self.ticker = str(self.ticker).upper()
+    def __init__(self, ticker) -> None:
+        self.ticker = str(ticker).upper()
 
     @property
     def info(self) -> pd.DataFrame:
+        '''pull company info'''
         _info = yf.Ticker(self.ticker).info
 
         df_info = pd.DataFrame([{
@@ -55,20 +53,17 @@ class CompanyOverviewInfo:
                 bigquery.SchemaField('shares_outstanding', 'FLOAT'),
                 bigquery.SchemaField('current_date', 'DATE'),
                 bigquery.SchemaField('stock_price', 'FLOAT'),
-                bigquery.SchemaField('ticker', 'STRING')
+                bigquery.SchemaField('ticker', 'STRING'),
+                bigquery.SchemaField('beta', 'FLOAT'),
             ],
         )
 
-        df = self.info
+        df_info = self.info
 
         client.load_table_from_dataframe(
-            df,
+            df_info,
             table_id,
             job_config=job_configs
         ).result()
 
         return f'uploaded {self.ticker} to ticker info'
-
-
-if __name__ == '__main__':
-    print(CompanyOverviewInfo(ticker='msft'))

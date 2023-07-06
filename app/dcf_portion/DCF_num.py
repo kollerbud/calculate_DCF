@@ -1,56 +1,42 @@
+#import sys
+#sys.path +=['../app/dcf_portion/']
+from typing import Dict
 from statistics import mean
 import functools
 from dataclasses import dataclass
 from google.cloud import bigquery
+from goog_auth import gcp_credentials
 
 
 @dataclass
-class DCFDataInput:
+class DiscountCashFlowRawData:
     '''Gather data from yfinance(API) to feed into a discount cash flow(DCF) model
 
         output for everything need for a DCF calculation
     '''
     ticker: str
-    client = bigquery.Client()
+    years_statement: int  # num of years data to use
+    client = bigquery.Client(credentials=gcp_credentials())
 
     def __post_init__(self):
         'check if ticker has info in bigquery'
-
-        # make ticker upper case
         self.ticker = str(self.ticker).upper()
-        # query string for bigquery
-        query_str = '''
-                SELECT ticker
-                FROM `all_data.income_statement`
-                WHERE ticker = ?
-                '''
-        # query config
-        job_configs = bigquery.QueryJobConfig(
-            query_parameters=[
-                bigquery.ScalarQueryParameter(None, 'STRING', self.ticker)
-            ]
-        )
-        # run query
-        query_job = self.client.query(query=query_str,
-                                      job_config=job_configs)
-        # check point there to see if query returns anything
-        query_result = [row for row in query_job]
-        if len(query_result) == 0:
-            # error is ticker is not in bigquery
-            raise ValueError(f'no data of {self.ticker}, upload it first')
 
     @functools.cached_property
     def _income_statement(self):
         query_str = '''
                 SELECT *
                 FROM all_data.income_statement
-                WHERE ticker = ?
+                WHERE
+                    ticker = @_ticker
+                    AND time_period >= DATE_SUB(CURRENT_DATE(), INTERVAL @_year YEAR)
                 ORDER BY time_period DESC
                 ;
                 '''
         job_configs = bigquery.QueryJobConfig(
             query_parameters=[
-                bigquery.ScalarQueryParameter(None, 'STRING', self.ticker)
+                bigquery.ScalarQueryParameter('_ticker', 'STRING', self.ticker),
+                bigquery.ScalarQueryParameter('_year', 'INTEGER', self.years_statement),
             ]
         )
         # run query
@@ -83,13 +69,16 @@ class DCFDataInput:
         query_str = '''
                 SELECT *
                 FROM all_data.balance_sheet
-                WHERE ticker = ?
+                WHERE
+                    ticker = @_ticker
+                    AND period >= DATE_SUB(CURRENT_DATE(), INTERVAL @_year YEAR)
                 ORDER BY period DESC
                 ;
                 '''
         job_configs = bigquery.QueryJobConfig(
             query_parameters=[
-                bigquery.ScalarQueryParameter(None, 'STRING', self.ticker)
+                bigquery.ScalarQueryParameter('_ticker', 'STRING', self.ticker),
+                bigquery.ScalarQueryParameter('_year', 'INTEGER', self.years_statement),
             ]
         )
         # run query
@@ -116,11 +105,14 @@ class DCFDataInput:
         return query_results
 
     @functools.cached_property
-    def ticker_info(self):
+    def _ticker_info(self):
         query_str = '''
             SELECT *
             FROM all_data.ticker_info
             WHERE ticker = ?
+            ORDER BY current_date DESC
+            LIMIT 1
+            ;
             '''
         job_configs = bigquery.QueryJobConfig(
             query_parameters=[
@@ -184,14 +176,14 @@ class DCFDataInput:
     @property
     def report_date(self) -> list:
         '''
-        return report date
+        report date
         '''
         return [x['date'] for x in self._income_statement]
 
     @property
     def revenues(self) -> list:
         '''
-        return a list all (4) revenue numbers of a company,
+        a list all (4) revenue numbers of a company,
         these numbers should not be none
         '''
         return [rev['total_revenue'] for rev in self._income_statement]
@@ -199,7 +191,7 @@ class DCFDataInput:
     @property
     def ebit(self) -> list:
         '''
-        return ebit of a company for the last 4 years
+        ebit of a company for the last 4 years
         these numbers should not be none
         '''
         return [ebit['operating_income'] for ebit in self._income_statement]
@@ -207,7 +199,7 @@ class DCFDataInput:
     @property
     def taxes(self) -> list:
         '''
-        return all taxes paid of a company for 4 years
+        all taxes paid of a company for 4 years
         should be a list
         '''
         return [tax['income_tax_expense'] for tax in self._income_statement]
@@ -215,7 +207,7 @@ class DCFDataInput:
     @property
     def depreciation(self) -> float:
         '''
-        return average of all depreciation as perccent
+        average of all depreciation as perccent
         of revenue
         '''
         perc_depre = [
@@ -227,8 +219,7 @@ class DCFDataInput:
     @property
     def capex(self) -> list:
         '''
-        return
-            capex as percentage of revenues
+        capex as percentage of revenues
         '''
         perc_capex = [
             -x['capex']/y for x, y
@@ -256,7 +247,7 @@ class DCFDataInput:
         return (self._balance_sheet[0]['cash'] -
                 self._balance_sheet[0]['long_term_debt']
                 )
-        
+
     @property
     def wacc_cal(self) -> float:
         '''
@@ -277,8 +268,13 @@ class DCFDataInput:
             'debt_perc': debt_perc,
             'equity_perc': equity_perc
         }
+    
+    @property
+    def earning_per_share(self):
+        return (self._income_statement[-1]['net_income']/
+                self._ticker_info['shares_outstanding'])  
 
-    def input_fileds(self):
+    def calculation_numbers(self) -> Dict[list, int]:
         # compile all sections to one method
         return {
             'report_date': self.report_date,
@@ -291,9 +287,14 @@ class DCFDataInput:
             'cashMinusDebt': self.cash_minus_debt,
             'yoyGrowth': self.yoy_grwoth_,
             'operMargin': self.operating_margin,
-            'tax_rate': self.tax_rate
+            'tax_rate': self.tax_rate,
+            'beta': self._ticker_info['beta'],
+            'shares_outstanding': self._ticker_info['shares_outstanding'],
+            'debt_perc': self.wacc_cal['debt_perc'],
+            'equity_perc': self.wacc_cal['equity_perc'],
+            'eps': self.earning_per_share
         }
 
 
 if __name__ == '__main__':
-    print(DCFDataInput('nvda').wacc_cal)
+    print(DiscountCashFlowRawData(ticker='nvda', years_statement=5).calculation_numbers())
