@@ -6,7 +6,7 @@ showErrorDetails= false
 
 [theme]
 #theme primary
-base="dark"
+#base="dark"
 
 [server]
 enableCORS = false

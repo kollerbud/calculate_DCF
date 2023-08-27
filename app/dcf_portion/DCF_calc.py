@@ -1,9 +1,3 @@
-#import sys
-#sys.path += ['../calculate_DCF/',
-#             '../calculate_DCF/app/'
-#             '../app/dcf_portion/',
-#             '../calculate_DCF/app/dcf_portion/'
-#             ]
 import functools
 from DCF_num import DiscountCashFlowRawData
 
