@@ -1,5 +1,3 @@
-#import sys
-#sys.path +=['../app/dcf_portion/']
 from typing import Dict
 from statistics import mean
 import functools
@@ -10,9 +8,8 @@ from goog_auth import gcp_credentials
 
 @dataclass
 class DiscountCashFlowRawData:
-    '''Gather data from yfinance(API) to feed into a discount cash flow(DCF) model
-
-        output for everything need for a DCF calculation
+    '''Gather data from yfinance(API) to feed into a discount cash flow(DCF)
+        model output for everything need for a DCF calculation
     '''
     ticker: str
     years_statement: int  # num of years data to use
@@ -268,11 +265,11 @@ class DiscountCashFlowRawData:
             'debt_perc': debt_perc,
             'equity_perc': equity_perc
         }
-    
+
     @property
     def earning_per_share(self):
         return (self._income_statement[-1]['net_income']/
-                self._ticker_info['shares_outstanding'])  
+                self._ticker_info['shares_outstanding'])
 
     def calculation_numbers(self) -> Dict[list, int]:
         # compile all sections to one method
