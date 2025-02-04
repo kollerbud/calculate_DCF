@@ -2,84 +2,15 @@ import functools
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional
-import duckdb
 import pandas as pd
-from FinancialDataETL import FinancialDataETL
-
-
-@dataclass
-class FinancialDataLoader:
-    'Loader class to load financial parquet files'
-    cik: str
-    base_path: str = 'financial_data'
-    filing_type: str = '10-K'
-    years_statement: int =5
-
-    def __post_init__(self):
-        self.cik = str(self.cik).zfill(10)
-        self.parquet_path = Path(self.base_path) / f'{self.cik}.parquet'
-        self._ensure_data_exists()
-        self._init_duckdb()
-
-    def _ensure_data_exists(self):
-        """Ensure parquet file exists, if not run ETL process"""
-        if not self.parquet_path.exists():
-            print(f"Parquet file not found for CIK {self.cik}. Running ETL process...")
-            etl = FinancialDataETL(base_path=self.base_path, cik=self.cik)
-            etl.process_company(mode="overwrite")
-
-    def _init_duckdb(self):
-        """Initialize DuckDB connection and register parquet file"""
-        self.con = duckdb.connect(database=':memory:')
-        self.con.sql(f"""
-            CREATE OR REPLACE VIEW financial_data AS
-            SELECT * FROM parquet_scan('{str(self.parquet_path)}')
-        """)
-
-    def get_financial_data(self, concepts: list, metric_name: str) -> pd.DataFrame:
-        """Get financial data with concept fallbacks"""
-        for concept in concepts:
-            query = f"""
-                SELECT value, end_date
-                FROM financial_data
-                WHERE concept_id = '{concept}'
-                AND form = '{self.filing_type}'
-                ORDER BY end_date DESC
-                LIMIT {self.years_statement}
-            """
-            result = self.con.sql(query).df()
-            if not result.empty:
-                return result
-        print(f"Warning: No data found for {metric_name} concepts: {concepts}")
-        return pd.DataFrame()
-
-    def get_latest_balance_sheet_value(self, concepts: list) -> float:
-        """Get latest balance sheet value with concept fallbacks"""
-        for concept in concepts:
-            query = f"""
-                SELECT value
-                FROM financial_data
-                WHERE concept_id = '{concept}'
-                AND form = '{self.filing_type}'
-                ORDER BY filing_date DESC
-                LIMIT 1
-            """
-            result = self.con.sql(query).df()
-            if not result.empty:
-                return result['value'].iloc[0]
-        return 0.0
-
-    def close(self):
-        """Close DuckDB connection"""
-        self.con.close()
-
+from data_processor import FinancialDataProcessor
 
 @dataclass
 class DCFModel:
     """
     Performs DCF calculations using data provided by FinancialDataLoader.
     """
-    data_loader: FinancialDataLoader
+    data_loader: FinancialDataProcessor
     risk_free_rate: float = 0.0261
     beta: float = 1.2
 
@@ -253,7 +184,7 @@ class DCFModel:
         self.data_loader.close()
 
 if __name__ == '__main__':
-    data_loader = FinancialDataLoader(cik="1018724",
+    data_loader = FinancialDataProcessor(cik="1018724",
                                       years_statement=5, # as a way of using real growth rate to test different growth rate
                                       filing_type='10-K')
     dcf_model = DCFModel(data_loader=data_loader, risk_free_rate=0.045, beta=1)

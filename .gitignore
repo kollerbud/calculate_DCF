@@ -33,6 +33,8 @@ run_info
 # custom
 .vscode/
 pyenv.cfg
+# exclude LLM information
+/llm_model
 
 
 share/

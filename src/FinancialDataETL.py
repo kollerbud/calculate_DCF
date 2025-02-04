@@ -18,7 +18,7 @@ class FinancialDataETL:
         self.base_path = str(base_path)  # Store as string
         self.cik = self._format_cik(str(cik))  # Store CIK as string
         Path(self.base_path).mkdir(parents=True, exist_ok=True)
-    
+
     def _format_cik(self, cik: str) -> str:
         """Format CIK to 10 digits with leading zeros"""
         return str(cik).zfill(10)
@@ -94,7 +94,7 @@ class FinancialDataETL:
             concepts_df['updated_at'] = current_time
 
             return {'facts': facts_df, 'concepts': concepts_df}
-            
+
         except Exception as e:
             raise Exception(f"Transformation failed: {str(e)}")
 
@@ -129,7 +129,7 @@ class FinancialDataETL:
                 )
 
             combined_df.to_parquet(file_path, index=False)
-            
+
         except Exception as e:
             raise Exception(f"Loading failed: {str(e)}")
 
@@ -143,17 +143,3 @@ class FinancialDataETL:
             print(f"Successfully processed CIK {self.cik}")
         except Exception as e:
             print(f"Error processing CIK {self.cik}: {str(e)}")
-
-
-if __name__ == '__main__':
-    # Process multiple companies
-    companies = [
-        ("1045810", "10-K"),  # NVIDIA
-        ("1730168", "10-Q"),  # Broadcom
-        ("789019", "10-K"),   # Microsoft
-        ("320193", "10-Q")    # Apple
-    ]
-
-    for cik, filing_type in companies:
-        etl = FinancialDataETL(base_path="financial_data", cik=cik)
-        etl.process_company(filing_type)

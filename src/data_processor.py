@@ -165,6 +165,17 @@ class FinancialDataProcessor:
             'payout_ratio': self.get_financial_data(payout_ratio_concepts, 'payout_ratio')
         }
 
+    def shares_outstanding(self) -> Dict:
+        shares_concepts = [
+            'EntityCommonStockSharesOutstanding',
+            'CommonStockSharesOutstanding',
+            'WeightedAverageNumberOfDilutedSharesOutstanding',
+            'CommonStockSharesIssued'
+        ]
+        shares_data = self.get_financial_data(shares_concepts, 'shares_outstanding')
+
+        return shares_data
+
 
     def get_llm_inputs(self) -> Dict:
         """Get comprehensive financial metrics for LLM analysis"""
@@ -172,7 +183,7 @@ class FinancialDataProcessor:
             'income_statement': self.get_income_statement_metrics(),
             'balance_sheet': self.get_balance_sheet_metrics(),
             'cash_flow': self.get_cash_flow_metrics(),
-            'dividends': self.get_dividend_metrics()
+            'shares_outstanding': self.shares_outstanding(),
         }
 
     def close(self):
@@ -184,5 +195,5 @@ if __name__ == '__main__':
     data_loader = FinancialDataProcessor(cik="0000077476",
                                       years_statement=5, # as a way of using real growth rate to test different growth rate
                                       filing_type='10-K')
-    
-    print(data_loader.get_llm_inputs())    
+
+    print(data_loader.get_llm_inputs())
