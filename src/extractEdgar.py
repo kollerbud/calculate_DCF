@@ -20,6 +20,8 @@ class FinancialFact:
 
 class EDGARClient:
     XBRL_URL = 'https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json'
+    SUBMISSIONS_URL = 'https://data.sec.gov/submissions/CIK{cik}.json'
+    
     SEC_HEADERS =  {
             # Chrome 83 Windows
             "Upgrade-Insecure-Requests": "1",
@@ -47,6 +49,12 @@ class EDGARClient:
         response = requests.get(url, headers=self.SEC_HEADERS)
         response.raise_for_status()
         return response
+    
+    def get_submissions(self):
+        
+        url = self.SUBMISSIONS_URL.format(cik=self.cik)
+        
+        return self._make_request(url=url).content
 
     def get_all_facts(self) -> Dict[str, List[FinancialFact]]:
         """Fetch all XBRL facts without filtering by filing type"""
@@ -87,3 +95,11 @@ class EDGARClient:
                         key = f"{taxonomy}:{concept}:{unit_type}"
                         facts_by_concept[key] = facts_list
         return facts_by_concept    
+
+
+# 0001045810
+# https://www.sec.gov/Archives/edgar/data/1318605/000119312514069681/d668062d10k.htm
+
+if __name__ == '__main__':
+    
+    print(EDGARClient(cik='1045810').get_submissions())

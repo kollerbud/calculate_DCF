@@ -176,15 +176,50 @@ class FinancialDataProcessor:
 
         return shares_data
 
+    def get_latest_metric_value(self, concepts: list, metric_name: str) -> float:
+        """Generic function to get the latest value for a given concept list."""
+        # Reusing the logic from get_latest_balance_sheet_value for broader use
+        for concept in concepts:
+            query = f"""
+                SELECT value
+                FROM financial_data
+                WHERE concept_id = '{concept}'
+                -- Using filing_date DESC might be more reliable for latest point-in-time value
+                ORDER BY filing_date DESC, end_date DESC
+                LIMIT 1
+            """
+            result = self.con.sql(query).df()
+            if not result.empty:
+                print(f"Found value for {metric_name} using concept: {concept}")
+                return result['value'].iloc[0]
+        print(f"Warning: No data found for {metric_name} concepts: {concepts}")
+        return 0.0
 
-    def get_llm_inputs(self) -> Dict:
-        """Get comprehensive financial metrics for LLM analysis"""
-        return {
-            'income_statement': self.get_income_statement_metrics(),
-            'balance_sheet': self.get_balance_sheet_metrics(),
-            'cash_flow': self.get_cash_flow_metrics(),
-            'shares_outstanding': self.shares_outstanding(),
-        }
+    def get_total_assets(self) -> float:
+        """Get latest total assets value."""
+        # Common concepts for Total Assets
+        concepts = ['Assets', 'AssetsCurrent', 'AssetsNoncurrent'] # Assets is usually comprehensive
+        # If 'Assets' isn't found, could try summing Current and Noncurrent, but 'Assets' is preferred
+        return self.get_latest_metric_value(concepts, 'Total Assets')
+
+    def get_total_liabilities(self) -> float:
+        """Get latest total liabilities value."""
+        # Common concepts for Total Liabilities
+        concepts = ['Liabilities', 'LiabilitiesCurrent', 'LiabilitiesNoncurrent'] # Liabilities is comprehensive
+        # If 'Liabilities' isn't found, could try summing Current and Noncurrent
+        return self.get_latest_metric_value(concepts, 'Total Liabilities')
+
+    def get_latest_dividend_per_share(self) -> float:
+        """Get the most recently declared or paid dividend per share."""
+        # Common concepts for Dividends Per Share
+        concepts = [
+            'CommonStockDividendsPerShareDeclared',
+            'CommonStockDividendsPerShareCashPaid',
+            'DividendsCommonStockCash' # This might be total dividends, needs check
+            # Add other potential concepts if needed
+        ]
+        # We need the latest value reported, likely from the latest filing date
+        return self.get_latest_metric_value(concepts, 'Dividend Per Share')
 
     def close(self):
         """Close DuckDB connection"""
@@ -192,8 +227,8 @@ class FinancialDataProcessor:
 
 
 if __name__ == '__main__':
-    data_loader = FinancialDataProcessor(cik="0000077476",
+    data_loader = FinancialDataProcessor(cik="1045810",
                                       years_statement=5, # as a way of using real growth rate to test different growth rate
                                       filing_type='10-K')
 
-    print(data_loader.get_llm_inputs())
+    print(data_loader.get_latest_dividend_per_share())

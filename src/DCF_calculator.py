@@ -1,6 +1,5 @@
 import functools
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Dict, Optional
 import pandas as pd
 from data_processor import FinancialDataProcessor
@@ -95,11 +94,12 @@ class DCFModel:
         avg_margin = (sum(raw['operating_margins']) / len(raw['operating_margins'])) if raw['operating_margins'] else 0.10
 
         initial_growth = raw['yoy_growth']
-        # if initial_growth <= 0:
-        #     initial_growth = self.risk_free_rate
+        if initial_growth <= 0:
+            initial_growth = self.risk_free_rate
 
-        # growth_rates = [max(initial_growth * (1 - n/10), self.risk_free_rate) for n in range(1, 16)]
-        growth_rates = [(initial_growth * (1 - n/10)) for n in range(1, 16)]
+        growth_rates = [max(initial_growth * (1 - n/10), self.risk_free_rate) for n in range(1, 16)]
+        # this growth_rates will go into negative growth
+        # growth_rates = [(initial_growth * (1 - n/10)) for n in range(1, 16)]
 
         current_revenue = raw['revenues'][0] if raw['revenues'] else 0
         projected_revenues = []
@@ -184,10 +184,10 @@ class DCFModel:
         self.data_loader.close()
 
 if __name__ == '__main__':
-    data_loader = FinancialDataProcessor(cik="1018724",
+    data_loader = FinancialDataProcessor(cik="1045810",
                                       years_statement=5, # as a way of using real growth rate to test different growth rate
                                       filing_type='10-K')
-    dcf_model = DCFModel(data_loader=data_loader, risk_free_rate=0.045, beta=1)
-    valuation = dcf_model.calculate_dcf(wacc=None)
+    dcf_model = DCFModel(data_loader=data_loader, risk_free_rate=0.04, beta=1)
+    valuation = dcf_model.calculate_dcf(wacc=0.08)
     dcf_model.close()
     print(valuation)
