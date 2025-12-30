@@ -17,9 +17,9 @@ class DCFModel:
     def _raw_calculations(self) -> Dict:
         """Calculate basic financial metrics"""
         # Get revenue data
-        revenue_concepts = ['Revenues', 'SalesRevenueNet', 'RevenueFromContractWithCustomerExcludingAssessedTax']
+        revenue_concepts = ['RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenue']
         revenues = self.data_loader.get_financial_data(revenue_concepts, 'revenue')
-
+        # print(revenues)
         # Get operating income
         op_income_concepts = ['OperatingIncomeLoss', 'OperatingIncome', 'IncomeLossFromContinuingOperationsBeforeIncomeTaxes']
         operating_income = self.data_loader.get_financial_data(op_income_concepts, 'operating_income')
@@ -184,8 +184,8 @@ class DCFModel:
         self.data_loader.close()
 
 if __name__ == '__main__':
-    data_loader = FinancialDataProcessor(cik="1045810",
-                                      years_statement=5, # as a way of using real growth rate to test different growth rate
+    data_loader = FinancialDataProcessor(cik="2488",
+                                      years_statement=4, # as a way of using real growth rate to test different growth rate
                                       filing_type='10-K')
     dcf_model = DCFModel(data_loader=data_loader, risk_free_rate=0.04, beta=1)
     valuation = dcf_model.calculate_dcf(wacc=0.08)

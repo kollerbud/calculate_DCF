@@ -49,6 +49,7 @@ class FinancialDataProcessor:
                 LIMIT {self.years_statement}
             """
             result = self.con.sql(query).df()
+            print(result)
             if not result.empty:
                 return result
         print(f"Warning: No data found for {metric_name} concepts: {concepts}")
@@ -224,11 +225,3 @@ class FinancialDataProcessor:
     def close(self):
         """Close DuckDB connection"""
         self.con.close()
-
-
-if __name__ == '__main__':
-    data_loader = FinancialDataProcessor(cik="1045810",
-                                      years_statement=5, # as a way of using real growth rate to test different growth rate
-                                      filing_type='10-K')
-
-    print(data_loader.get_latest_dividend_per_share())

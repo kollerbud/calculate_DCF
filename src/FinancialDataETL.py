@@ -1,9 +1,11 @@
 import pandas as pd
-from datetime import datetime
-from typing import Dict, List
+import re
 from pathlib import Path
-from extractEdgar import EDGARClient, FinancialFact
+from edgar import Company, set_identity, MultiFinancials
+from edgar.xbrl import XBRLS
 
+# SEC identity
+set_identity('name_company@gmail.com')
 
 class FinancialDataETL:
 
@@ -15,131 +17,146 @@ class FinancialDataETL:
             base_path: Root directory for Parquet files
             cik: Company CIK number
         """
-        self.base_path = str(base_path)  # Store as string
-        self.cik = self._format_cik(str(cik))  # Store CIK as string
-        Path(self.base_path).mkdir(parents=True, exist_ok=True)
-
-    def _format_cik(self, cik: str) -> str:
-        """Format CIK to 10 digits with leading zeros"""
-        return str(cik).zfill(10)
+        self.base_path = Path(base_path)
+        self.cik = str(cik).zfill(10)  # Store CIK as string
+        self.base_path.mkdir(parents=True, exist_ok=True)
 
     def _get_table_path(self) -> Path:
         """Generate path for Parquet files using CIK number"""
-        return Path(self.base_path) / f"{self.cik}.parquet"
+        return self.base_path / f"{self.cik}.parquet"
 
-    def extract_company_data(self) -> Dict[str, List[FinancialFact]]:
-        """Extract all financial data from SEC API"""
+    def extract_and_transform(self) -> pd.DataFrame:
+        """
+        get standardized financials using edgartools and
+        transform them into a single long-format DataFrame
+        """
+        print('get financials for CIK {self.cik}')
+
         try:
-            client = EDGARClient(cik=self.cik)
-            return client.get_all_facts()
+            company = Company(self.cik)
+            financials = company.get_financials()
+            if not financials:
+                raise Exception('no financials')
         except Exception as e:
-            raise Exception(f"Failed to extract data for CIK {self.cik}: {str(e)}")
+            raise Exception(f'failed to get data from edgar')
 
-    def transform_to_dataframes(
-        self,
-        facts_by_concept: Dict[str, List[FinancialFact]],
-    ) -> Dict[str, pd.DataFrame]:
-        """
-        Transform financial facts into normalized DataFrames
-        Returns:
-            Dictionary containing 'facts' and 'concepts' DataFrames
-        """
-        facts_records = []
-        concepts_records = set()
+        # 1. Get the raw dataframes (Don't forget the parentheses!)
+        dfs = {
+            'Income Statement': financials.income_statement().to_dataframe(),
+            'Balance Sheet': financials.balance_sheet().to_dataframe(),
+            'Cash Flow': financials.cashflow_statement().to_dataframe(),
+        }
 
-        try:
-            for key, facts in facts_by_concept.items():
-                taxonomy, concept, unit = key.split(':')
+        all_records = []
+        for statement_type, df in dfs.items():
+            df = df.reset_index()
 
-                # Add concept metadata if facts exist
-                if facts:
-                    concepts_records.add((
-                        concept,
-                        taxonomy,
-                        facts[0].label or '',  # Handle None labels
-                        unit
-                    ))
+            if 'label' in df.columns:
+                df['concept'] = df['label']
+            else:
+                df.rename(columns={df.columns[0]: 'concept'}, inplace=True)
 
-                # Process each fact
-                for fact in facts:
-                    fact_record = {
-                        'cik': self.cik,
-                        'concept_id': concept,
-                        'taxonomy': taxonomy,
-                        'value': fact.value,
-                        'unit': unit,
-                        'start_date': fact.start_date,
-                        'end_date': fact.end_date,
-                        'filing_date': fact.filing_date,
-                        'frame': fact.frame,
-                        'form': fact.form
-                    }
-                    facts_records.append(fact_record)
+            date_cols = []
+            for col in df.columns:
+                if re.match(r'^\d{4}-\d{2}-\d{2}$', str(col)):
+                    date_cols.append(col)
+            if not date_cols:
+                print(f"Warning: No date columns found for {statement_type}")
+                continue
 
-            # Create DataFrames
-            facts_df = pd.DataFrame(facts_records)
-            concepts_df = pd.DataFrame(
-                concepts_records,
-                columns=['concept_id', 'taxonomy', 'label', 'unit']
+            # melt only the valid date columns
+            melted = df.melt(
+                id_vars=['concept'],
+                value_vars=date_cols,
+                var_name='end_date',
+                value_name='value'
             )
+            melted['statement_type'] = statement_type
+            all_records.append(melted)
 
-            # Convert dates and handle missing values
-            date_cols = ['start_date', 'end_date', 'filing_date']
-            for col in date_cols:
-                facts_df[col] = pd.to_datetime(facts_df[col], errors='coerce')
+        if not all_records:
+            return pd.DataFrame()
 
-            # Add metadata
-            current_time = datetime.now()
-            facts_df['updated_at'] = current_time
-            concepts_df['updated_at'] = current_time
+        combined_df = pd.concat(all_records, ignore_index=True)
+        # Final Cleanup
+        combined_df['cik'] = self.cik
+        combined_df['end_date'] = pd.to_datetime(combined_df['end_date'])
+        # Coerce values to numbers (handling any stray non-numeric characters)
+        combined_df['value'] = pd.to_numeric(combined_df['value'], errors='coerce')
 
-            return {'facts': facts_df, 'concepts': concepts_df}
+        # Drop rows where value is NaN (but keep 0.0)
+        return combined_df.dropna(subset=['value'])
 
-        except Exception as e:
-            raise Exception(f"Transformation failed: {str(e)}")
 
     def load_to_parquet(
         self,
-        dataframes: Dict[str, pd.DataFrame],
-        mode: str = "append"
+        df: pd.DataFrame,
+        mode: str = "overwrite"
     ) -> None:
         """Load DataFrames to Parquet file"""
-        try:
-            facts_df = dataframes['facts']
-            concepts_df = dataframes['concepts']
 
-            if facts_df.empty:
-                print(f"No facts data for CIK {self.cik}")
-                return
+        file_path = self._get_table_path()
 
-            combined_df = facts_df.merge(
-                concepts_df,
-                on=['concept_id', 'taxonomy', 'unit'],
-                how='left'
+        if mode =='append' and file_path.exists():
+            existing_df = pd.read_parquet(file_path)
+            df = pd.concat([existing_df, df]).drop_duplicates(
+                subset=['concept', 'end_date', 'statement_type'],
+                keep='last'
             )
+        df.to_parquet(file_path, index=False)
+        print(f"Saved {len(df)} standardized records to {file_path}")
 
-            file_path = self._get_table_path()
-
-            if mode == "append" and file_path.exists():
-                existing_df = pd.read_parquet(file_path)
-                composite_key = ['concept_id', 'start_date', 'end_date', 'filing_date', 'form']
-                combined_df = pd.concat([existing_df, combined_df]).drop_duplicates(
-                    subset=composite_key,
-                    keep='last'
-                )
-
-            combined_df.to_parquet(file_path, index=False)
-
-        except Exception as e:
-            raise Exception(f"Loading failed: {str(e)}")
-
-    def process_company(self,
-                        mode: str = "append") -> None:
+    def process_company(self, mode: str = "overwrite") -> None:
         """Complete ETL process for a company"""
-        try:
-            facts = self.extract_company_data()
-            dataframes = self.transform_to_dataframes(facts)
-            self.load_to_parquet(dataframes, mode)
-            print(f"Successfully processed CIK {self.cik}")
-        except Exception as e:
-            print(f"Error processing CIK {self.cik}: {str(e)}")
+        df = self.extract_and_transform()
+        self.load_to_parquet(df, mode)
+
+if __name__ == '__main__':
+    # cik 104169 walmart
+    # 1730168 broadcom
+    #  2488 amd
+    #  320193 apple
+    # 1045810 nvidia
+    # 1652044  google
+    # 1018724 amazon
+
+    # label to check for, income statement
+    # revenues -> "Contract Revenue"/"Revenue"
+    # operating_income -> "Operating Income"
+    # interest_expense -> "Interest Expense"
+    # tax_expense -> 
+    # pretax_income
+    # shares_outstanding
+
+    # balance sheet
+    # cash
+    # short_term_debt
+    # long_term_debt
+    # equity
+
+    company = Company(cik_or_ticker=1652044)
+    filings = company.get_filings(form="10-K").head(5)
+
+    multi_financials = MultiFinancials.extract(filings)
+    multi_income = multi_financials.income_statement()
+    multi_balance = multi_financials.balance_sheet()
+    multi_cash = multi_financials.cashflow_statement()
+    
+    xbrl = XBRLS.from_filings(filings)
+
+    financials = company.get_financials()
+
+    print(
+        # facts.query().by_concept('Revenue').to_dataframe()
+        # df_income.loc[df_income['label']=='Revenue']
+        # financials.get_revenue(),
+        # financials.get_net_income(),
+        # financials.get_free_cash_flow()
+    )
+    print(
+        # multi_income
+    )
+    
+    print(
+        xbrl.query().by_concept("InterestPaid").to_dataframe()
+    )
