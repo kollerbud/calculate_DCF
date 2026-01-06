@@ -8,8 +8,10 @@ from edgar.xbrl import XBRLS
 set_identity('name_company@gmail.com')
 
 class FinancialDataETL:
+    CONSOLIDATED_FILE = 'consolidated_financials.parquet'
 
-    def __init__(self, base_path: str, cik: str):
+    def __init__(self, cik: str, base_path: str='financial_data',
+                 years: int = 10, filing_type: str = '10-K'):
         """
         Initialize ETL process
 
@@ -17,99 +19,188 @@ class FinancialDataETL:
             base_path: Root directory for Parquet files
             cik: Company CIK number
         """
+        self.cik = str(cik).zfill(10)
         self.base_path = Path(base_path)
-        self.cik = str(cik).zfill(10)  # Store CIK as string
-        self.base_path.mkdir(parents=True, exist_ok=True)
 
-    def _get_table_path(self) -> Path:
-        """Generate path for Parquet files using CIK number"""
-        return self.base_path / f"{self.cik}.parquet"
+        self.filing_type = filing_type
+        self.years = years
+
+        self.base_path.mkdir(parents=True, exist_ok=True)
+        self.file_path = self.base_path / self.CONSOLIDATED_FILE
+
 
     def extract_and_transform(self) -> pd.DataFrame:
         """
-        get standardized financials using edgartools and
-        transform them into a single long-format DataFrame
+        get financials, stitch them and applies label mapping
         """
-        print('get financials for CIK {self.cik}')
+        print(f'getting last {self.years} years of {self.filing_type} for CIK {self.cik}')
 
         try:
             company = Company(self.cik)
-            financials = company.get_financials()
-            if not financials:
-                raise Exception('no financials')
-        except Exception as e:
-            raise Exception(f'failed to get data from edgar')
 
-        # 1. Get the raw dataframes (Don't forget the parentheses!)
-        dfs = {
-            'Income Statement': financials.income_statement().to_dataframe(),
-            'Balance Sheet': financials.balance_sheet().to_dataframe(),
-            'Cash Flow': financials.cashflow_statement().to_dataframe(),
-        }
+            filings = company.get_filings(form=self.filing_type).latest(self.years)
+            if not filings:
+                print(f'no {self.filing_type} filings found for {self.cik}')
+                return pd.DataFrame()
+            xbrls = XBRLS.from_filings(filings)
+
+            dfs = {
+                'Income Statement': xbrls.statements.income_statement().to_dataframe(),
+                'Balance Sheet': xbrls.statements.balance_sheet().to_dataframe(),
+                'Cash Flow': xbrls.statements.cashflow_statement().to_dataframe(),
+            }
+        except Exception as e:
+            print(f'failed to get data: {e}')
+            return pd.DataFrame()
 
         all_records = []
+
         for statement_type, df in dfs.items():
+            if df.empty: continue
+
             df = df.reset_index()
 
             if 'label' in df.columns:
-                df['concept'] = df['label']
+                df['concept_id'] = df['label'].astype(str).str.strip()
             else:
-                df.rename(columns={df.columns[0]: 'concept'}, inplace=True)
-
-            date_cols = []
-            for col in df.columns:
-                if re.match(r'^\d{4}-\d{2}-\d{2}$', str(col)):
-                    date_cols.append(col)
+                df.rename(columns={df.columns[0]: 'concept_id'}, inplace=True)
+                df['concept_id'] = df['concept_id'].astype(str).str.strip()
+            # --- DATE HANDLING (Regex) ---
+            # Finds columns like "2025-11-02"
+            date_cols = [c for c in df.columns if re.match(r'^\d{4}-\d{2}-\d{2}$', str(c))]
             if not date_cols:
-                print(f"Warning: No date columns found for {statement_type}")
                 continue
-
-            # melt only the valid date columns
+            # melt to long format (concept_id | end_data| value)
             melted = df.melt(
-                id_vars=['concept'],
+                id_vars=['concept_id'],
                 value_vars=date_cols,
                 var_name='end_date',
                 value_name='value'
             )
+
             melted['statement_type'] = statement_type
             all_records.append(melted)
 
         if not all_records:
             return pd.DataFrame()
 
+        # combien and clean up
         combined_df = pd.concat(all_records, ignore_index=True)
-        # Final Cleanup
         combined_df['cik'] = self.cik
         combined_df['end_date'] = pd.to_datetime(combined_df['end_date'])
-        # Coerce values to numbers (handling any stray non-numeric characters)
         combined_df['value'] = pd.to_numeric(combined_df['value'], errors='coerce')
+        combined_df['form'] = self.filing_type
 
-        # Drop rows where value is NaN (but keep 0.0)
         return combined_df.dropna(subset=['value'])
 
+    def save_consolidated(self, new_df: pd.DataFrame) -> None:
+        """
+        append new data to consolidated parquet file.
+        remove existing data for this cik before appending to avoid duplicates
+        """
 
-    def load_to_parquet(
-        self,
-        df: pd.DataFrame,
-        mode: str = "overwrite"
-    ) -> None:
-        """Load DataFrames to Parquet file"""
+        if new_df.empty:
+            return None
 
-        file_path = self._get_table_path()
+        if self.file_path.exists():
+            try:
+                existing_df = pd.read_parquet(self.file_path)
+                # remove old data for this specific cik
+                combined = pd.concat([existing_df, new_df], ignore_index=True)
 
-        if mode =='append' and file_path.exists():
-            existing_df = pd.read_parquet(file_path)
-            df = pd.concat([existing_df, df]).drop_duplicates(
-                subset=['concept', 'end_date', 'statement_type'],
-                keep='last'
-            )
-        df.to_parquet(file_path, index=False)
-        print(f"Saved {len(df)} standardized records to {file_path}")
+                final_df = combined.drop_duplicates(
+                    subset=['cik', 'concept_id', 'end_date', 'form'],
+                    keep='last',
+                )
+            except Exception as e:
+                print(f"Warning: Could not read existing file ({e}). Overwriting.")
+                final_df = new_df
+        else:
+            final_df = new_df
 
-    def process_company(self, mode: str = "overwrite") -> None:
-        """Complete ETL process for a company"""
+        final_df.to_parquet(self.file_path, index=False)
+        print(f"Saved/Updated records for {self.cik}. Total rows in DB: {len(final_df)}")
+
+    def process_company(self) -> None:
         df = self.extract_and_transform()
-        self.load_to_parquet(df, mode)
+        self.save_consolidated(df)
+
+
+LABEL_MAPPING = {
+    # --- Revenue ---
+    "Contract Revenue": "revenues",
+    "Net sales": "revenues",
+    "Net revenue": "revenues",
+    "Net revenues": "revenues",
+    "Total net sales": "revenues",
+    "Revenue": "revenues",
+    "Revenues": "revenues",
+
+    # --- Operating Income ---
+    "Operating Income": "operating_income",
+    "Operating income": "operating_income",
+    "Operating Income (Loss)": "operating_income",
+
+    # --- Interest Expense ---
+    "Interest Expense": "interest_expense",
+    "Interest expense": "interest_expense",
+    "Interest expense, net": "interest_expense",
+    "Interest Expense (non-operating)": "interest_expense",
+
+    # --- Tax Expense ---
+    "Income Tax Expense": "tax_expense",
+    "Income tax provision": "tax_expense",
+    "Provision for Income Taxes": "tax_expense",
+    "Provision for (benefit from) income taxes": "tax_expense",
+
+    # --- Net Income ---
+    "Net Income": "net_income",
+    "Net Income from Continuing Operations": "net_income",
+    "Net Income (Loss)": "net_income",
+    "Basic Net Income Available to Common Shareholders": "net_income",
+
+    # --- Balance Sheet (Assets) ---
+    "Cash and cash equivalents": "cash",
+    "Cash and Cash Equivalents": "cash",
+    "Cash, cash equivalents and restricted cash": "cash",
+
+    # --- Balance Sheet (Equity) ---
+    "Total stockholders' equity": "equity",
+    "Total Stockholders' Equity": "equity",
+    "Total equity": "equity",
+    "Stockholders' equity": "equity",
+    "Shareholders' equity": "equity",
+    "Total deficit": "equity",
+    "Total stockholders' deficit": "equity",
+
+    # --- Balance Sheet (Debt) ---
+    "Long Term Debt": "long_term_debt",
+    "Long-Term Debt": "long_term_debt",
+    "Long-term debt": "long_term_debt",
+    "Long-term debt, net": "long_term_debt",
+    "Notes payable and long-term debt, less current portion": "long_term_debt",
+
+    "Short-term debt": "short_term_debt",
+    "Short-term borrowings": "short_term_debt",
+    "Current portion of long-term debt": "short_term_debt",
+    "Commercial paper": "short_term_debt",
+
+    # --- Cash Flow ---
+    "Payments to acquire property, plant and equipment": "capex",
+    "Purchases of property, plant and equipment": "capex",
+    "Purchases of property and equipment": "capex",
+    "Capital expenditures": "capex",
+
+    "Depreciation and amortization": "depreciation",
+    "Depreciation": "depreciation",
+    "Depreciation and amortization of property and equipment": "depreciation",
+
+    # --- Entity / Shares ---
+    "Common Stock Shares Outstanding": "shares_outstanding",
+    "Weighted average shares outstanding - diluted": "shares_outstanding",
+    "Shares Outstanding (Diluted)": "shares_outstanding"
+}
+
 
 if __name__ == '__main__':
     # cik 104169 walmart
@@ -120,43 +211,29 @@ if __name__ == '__main__':
     # 1652044  google
     # 1018724 amazon
 
-    # label to check for, income statement
-    # revenues -> "Contract Revenue"/"Revenue"
-    # operating_income -> "Operating Income"
-    # interest_expense -> "Interest Expense"
-    # tax_expense -> 
-    # pretax_income
-    # shares_outstanding
-
-    # balance sheet
-    # cash
-    # short_term_debt
-    # long_term_debt
-    # equity
-
-    company = Company(cik_or_ticker=1652044)
-    filings = company.get_filings(form="10-K").head(5)
+    company = Company(cik_or_ticker=2488)
+    filings = company.get_filings(form="10-K").latest(2)
 
     multi_financials = MultiFinancials.extract(filings)
     multi_income = multi_financials.income_statement()
     multi_balance = multi_financials.balance_sheet()
     multi_cash = multi_financials.cashflow_statement()
-    
+
     xbrl = XBRLS.from_filings(filings)
 
-    financials = company.get_financials()
+    # financials = company.get_financials()
 
+    # f = FinancialDataETL(cik=2488)
+
+    # print(
+    #     f.process_company()
+    # )
     print(
-        # facts.query().by_concept('Revenue').to_dataframe()
-        # df_income.loc[df_income['label']=='Revenue']
-        # financials.get_revenue(),
-        # financials.get_net_income(),
-        # financials.get_free_cash_flow()
-    )
-    print(
-        # multi_income
-    )
-    
-    print(
-        xbrl.query().by_concept("InterestPaid").to_dataframe()
+        # multi_income.to_dataframe()
+        '-----------------income statement----------------------------',
+        xbrl.statements.income_statement().to_dataframe(),
+        '--------------balance sheet------------------------------',
+        xbrl.statements.balance_sheet().to_dataframe(),
+        '--------------cash flow------------------------------',
+        xbrl.statements.cashflow_statement().to_dataframe(),
     )

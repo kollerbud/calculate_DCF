@@ -1,12 +1,68 @@
-from pathlib import Path
 import duckdb
-from typing import Dict
 import pandas as pd
+from pathlib import Path
+from typing import Dict, List, Optional
 from FinancialDataETL import FinancialDataETL
 
 
-# @dataclass
 class FinancialDataProcessor:
+
+    METRIC_ALIASES = {
+        'revenue': [
+            "revenues", "Revenue", "Net sales", "Net revenue", "Net revenues",
+            "Total net sales", "Contract Revenue",
+            "RevenueFromContractWithCustomerExcludingAssessedTax", "SalesRevenueNet"
+        ],
+        'operating_income': [
+            "operating_income", "Operating Income", "Operating income",
+            "Operating Income (Loss)", "OperatingIncomeLoss",
+            "IncomeLossFromContinuingOperationsBeforeIncomeTaxes"
+        ],
+        'net_income': [
+            "net_income", "Net Income", "Net Income (Loss)",
+            "Net Income from Continuing Operations",
+            "Basic Net Income Available to Common Shareholders", "NetIncomeLoss"
+        ],
+        'interest_expense': [
+            "interest_expense", "Interest Expense", "Interest expense",
+            "Interest expense, net", "Interest Expense (non-operating)",
+            "InterestPaid"
+        ],
+        'tax_expense': [
+            "tax_expense", "Income Tax Expense", "Income tax provision",
+            "Provision for Income Taxes", "Provision for (benefit from) income taxes",
+            "IncomeTaxExpenseBenefit", "IncomeTaxPaid"
+        ],
+        'cash': [
+            "cash", "Cash and cash equivalents", "Cash and Cash Equivalents",
+            "Cash, cash equivalents and restricted cash",
+            "CashAndCashEquivalentsAtCarryingValue"
+        ],
+        'equity': [
+            "equity", "Total stockholders' equity", "Total Stockholders' Equity",
+            "Total equity", "Stockholders' equity", "Shareholders' equity",
+            "StockholdersEquity", "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"
+        ],
+        'long_term_debt': [
+            "long_term_debt", "Long Term Debt", "Long-Term Debt", "Long-term debt",
+            "Long-term debt, net", "LongTermDebt", "LongTermDebtAndCapitalLeaseObligations"
+        ],
+        'short_term_debt': [
+            "short_term_debt", "Short-term debt", "Short-term borrowings",
+            "Current portion of long-term debt", "ShortTermDebt", "DebtCurrent"
+        ],
+        'capex': [
+            "capex", "Payments to acquire property, plant and equipment",
+            "Purchases of property, plant and equipment",
+            "Purchases of property and equipment", "Capital expenditures"
+        ],
+        'shares_outstanding': [
+            "shares_outstanding", "Common Stock Shares Outstanding",
+            "Weighted average shares outstanding - diluted",
+            "Shares Outstanding (Diluted)", "EntityCommonStockSharesOutstanding",
+            "CommonStockSharesOutstanding", "WeightedAverageNumberOfDilutedSharesOutstanding"
+        ]
+    }
 
     def __init__(self,
             cik: str,
@@ -16,18 +72,34 @@ class FinancialDataProcessor:
         ):
         self.cik = str(cik).zfill(10)
         self.base_path = base_path
-        self.parquet_path = Path(self.base_path) / f'{self.cik}.parquet'
+        self.parquet_path = Path(self.base_path) / FinancialDataETL.CONSOLIDATED_FILE
         self.filing_type = filing_type
         self.years_statement = years_statement
+
         self._ensure_data_exists()
         self._init_duckdb()
 
     def _ensure_data_exists(self):
-        """Ensure parquet file exists, if not run ETL process"""
-        if not self.parquet_path.exists():
-            print(f"Parquet file not found for CIK {self.cik}. Running ETL process...")
-            etl = FinancialDataETL(base_path=self.base_path, cik=self.cik)
-            etl.process_company(mode="overwrite")
+        """
+        check if CIK exists in the consolidated file, otherwise run ETL
+        """
+        data_exists = False
+        if self.parquet_path.exists():
+            con = duckdb.connect(':memory:')
+            try:
+                count = con.execute(f"""
+                    SELECT count(*) FROM parquet_scan('{str(self.parquet_path)}')
+                    WHERE cik = '{self.cik}' AND form = '{self.filing_type}'
+                """).fetchone()[0]
+                if count > 0:
+                    data_exists = True
+            except Exception:
+                pass
+
+        if not data_exists:
+            print(f"Data missing for CIK {self.cik} in {self.parquet_path}. Running ETL...")
+            etl = FinancialDataETL(base_path=self.base_path, cik=self.cik, filing_type=self.filing_type)
+            etl.process_company()
 
     def _init_duckdb(self):
         """Initialize DuckDB connection and register parquet file"""
@@ -36,192 +108,107 @@ class FinancialDataProcessor:
             CREATE OR REPLACE VIEW financial_data AS
             SELECT * FROM parquet_scan('{str(self.parquet_path)}')
         """)
+        
+    def _get_aliases(self, metric_name: str) -> List[str]:
+        return self.METRIC_ALIASES.get(metric_name, [metric_name])
 
-    def get_financial_data(self, concepts: list, metric_name: str) -> pd.DataFrame:
-        """Get financial data with concept fallbacks"""
-        for concept in concepts:
-            query = f"""
-                SELECT value, end_date
-                FROM financial_data
-                WHERE concept_id = '{concept}'
-                AND form = '{self.filing_type}'
-                ORDER BY end_date DESC
-                LIMIT {self.years_statement}
-            """
-            result = self.con.sql(query).df()
-            print(result)
-            if not result.empty:
-                return result
-        print(f"Warning: No data found for {metric_name} concepts: {concepts}")
+    def get_time_series(
+            self, metric_name: str,
+            custom_aliases: Optional[List[str]] = None
+        ) -> pd.DataFrame:
+        """
+        get all values for a standardized concept over time
+        """
+        aliases = custom_aliases or self._get_aliases(metric_name)
+        safe_aliases = [a.replace("'", "''") for a in aliases]
+        alias_list_str = "', '".join(safe_aliases)
+        
+        query = f"""
+            SELECT value, end_date, concept_id
+            FROM financial_data
+            WHERE cik = '{self.cik}'
+            AND form = '{self.filing_type}'
+            AND concept_id IN ('{alias_list_str}')
+            ORDER BY end_date DESC
+            LIMIT {self.years_statement * 5}
+        """
+        df_all = pd.DataFrame()
+        try:
+            df_all = self.con.sql(query).df()
+        except Exception as e:
+            print(f'error feteching time series for {metric_name}: {e}')
+            return pd.DataFrame()
+        
+        if df_all.empty:
+            return pd.DataFrame()
+        
+        for alias in aliases:
+            subset = df_all[df_all['concept_id'] == alias].copy()
+            
+            if not subset.empty:
+                subset['end_date'] = pd.to_datetime(subset['end_date'])
+                return subset[['value', 'end_date']].sort_values(by='end_date', ascending=False).head(self.years_statement)
+        
         return pd.DataFrame()
 
-    def get_latest_balance_sheet_value(self, concepts: list) -> float:
-        """Get latest balance sheet value with concept fallbacks"""
-        for concept in concepts:
-            query = f"""
-                SELECT value
-                FROM financial_data
-                WHERE concept_id = '{concept}'
-                AND form = '{self.filing_type}'
-                ORDER BY filing_date DESC
-                LIMIT 1
-            """
-            result = self.con.sql(query).df()
-            if not result.empty:
-                return result['value'].iloc[0]
+    def get_latest_value(self, metric_name: str) -> float:
+        """
+        get the most recent value for a concept
+        """
+        df = self.get_time_series(metric_name)
+        if not df.empty:
+            return float(df['value'].iloc[0])
         return 0.0
 
-    def _calculate_growth_rate(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate year-over-year growth rates"""
-        if df.empty:
-            return pd.DataFrame()
-        df = df.sort_values('end_date')
-        df['growth_rate'] = df['value'].pct_change() * 100
-        return df
-
     def get_income_statement_metrics(self) -> Dict:
-        """Get income statement metrics"""
-        # Revenue metrics
-        revenue_concepts = ['Revenues', 'SalesRevenueNet', 'RevenueFromContractWithCustomerExcludingAssessedTax']
-        revenue_data = self.get_financial_data(revenue_concepts, 'revenue')
-        revenue_growth = self._calculate_growth_rate(revenue_data)
-
-        # Net income metrics
-        net_income_concepts = ['NetIncomeLoss', 'ProfitLoss', 'NetIncomeLossAvailableToCommonStockholdersBasic']
-        net_income_data = self.get_financial_data(net_income_concepts, 'net_income')
-        net_income_growth = self._calculate_growth_rate(net_income_data)
-
-        # Operating expenses
-        cogs_concepts = ['CostOfGoodsAndServicesSold', 'CostOfRevenue']
-        opex_concepts = ['OperatingExpenses', 'GeneralAndAdministrativeExpense', 'SellingGeneralAndAdministrativeExpense']
-
-        # Interest and forex
-        interest_expense_concepts = ['InterestExpense', 'InterestIncomeExpenseNet']
-        forex_concepts = ['ForeignCurrencyTransactionGainLossBeforeTax', 'ForeignCurrencyTransactionGainLoss']
-
+        """
+        retrive income statement metrics
+        """
         return {
-            'revenue': revenue_growth,
-            'net_income': net_income_growth,
-            'cogs': self.get_financial_data(cogs_concepts, 'cost_of_goods_sold'),
-            'operating_expenses': self.get_financial_data(opex_concepts, 'operating_expenses'),
-            'interest_expense': self.get_financial_data(interest_expense_concepts, 'interest_expense'),
-            'forex_impact': self.get_financial_data(forex_concepts, 'forex_impact')
+            'revenues': self.get_time_series('revenues'),
+            'operating_income': self.get_time_series('operating_income'),
+            'net_income': self.get_time_series('net_income'),
+            'interest_expense': self.get_time_series('interest_expense'),
+            'tax_expense': self.get_time_series('tax_expense'),
         }
 
     def get_balance_sheet_metrics(self) -> Dict:
-        """Get balance sheet metrics"""
-        # Current assets
-        cash_concepts = ['CashAndCashEquivalentsAtCarryingValue', 'Cash']
-        ar_concepts = ['AccountsReceivableNetCurrent', 'AccountsNotesAndLoansReceivableNetCurrent']
-        inventory_concepts = ['InventoryNet', 'InventoryFinishedGoodsNetOfReserves']
-
-        # Non-current assets
-        ppe_concepts = ['PropertyPlantAndEquipmentNet', 'PropertyPlantAndEquipmentGross']
-        intangible_concepts = ['IntangibleAssetsNet', 'IntangibleAssetsNetExcludingGoodwill']
-
-        # Liabilities and equity
-        total_liabilities_concepts = ['Liabilities', 'LiabilitiesCurrent']
-        equity_concepts = ['StockholdersEquity', 'CommonStockValue']
-
+        """
+        retrive standardized balance sheet metrics
+        """
         return {
-            'cash': self.get_latest_balance_sheet_value(cash_concepts),
-            'accounts_receivable': self.get_latest_balance_sheet_value(ar_concepts),
-            'inventory': self.get_latest_balance_sheet_value(inventory_concepts),
-            'ppe': self.get_latest_balance_sheet_value(ppe_concepts),
-            'intangible_assets': self.get_latest_balance_sheet_value(intangible_concepts),
-            'total_liabilities': self.get_latest_balance_sheet_value(total_liabilities_concepts),
-            'stockholders_equity': self.get_latest_balance_sheet_value(equity_concepts)
+            'cash': self.get_latest_value('cash'),
+            'equity': self.get_latest_value('equity'),
+            'long_term_debt': self.get_latest_value('long_term_debt'),
+            'short_term_debt': self.get_latest_value('short_term_debt'),
         }
 
-    def get_cash_flow_metrics(self) -> Dict:
-        """Get cash flow metrics"""
-        # Operating cash flow components
-        operating_cf_concepts = ['NetCashProvidedByUsedInOperatingActivities']
-        depreciation_concepts = ['DepreciationDepletionAndAmortization', 'Depreciation']
-        capex_concepts = ['PaymentsToAcquirePropertyPlantAndEquipment', 'CapitalExpendituresIncurredButNotYetPaid']
-
-        # Working capital changes
-        ar_change_concepts = ['IncreaseDecreaseInAccountsReceivable']
-        inventory_change_concepts = ['IncreaseDecreaseInInventories']
-        ap_change_concepts = ['IncreaseDecreaseInAccountsPayable']
-
-        return {
-            'operating_cash_flow': self.get_financial_data(operating_cf_concepts, 'operating_cash_flow'),
-            'depreciation': self.get_financial_data(depreciation_concepts, 'depreciation'),
-            'capex': self.get_financial_data(capex_concepts, 'capital_expenditures'),
-            'ar_change': self.get_financial_data(ar_change_concepts, 'accounts_receivable_change'),
-            'inventory_change': self.get_financial_data(inventory_change_concepts, 'inventory_change'),
-            'ap_change': self.get_financial_data(ap_change_concepts, 'accounts_payable_change')
-        }
-
-    def get_dividend_metrics(self) -> Dict:
-        """Get dividend related metrics"""
-        dividend_per_share_concepts = ['CommonStockDividendsPerShareDeclared', 'CommonStockDividendsPerShareCashPaid']
-        dividend_yield_concepts = ['DividendYield']
-        payout_ratio_concepts = ['PayoutRatio', 'DividendPayoutRatio']
-
-        return {
-            'dividend_per_share': self.get_financial_data(dividend_per_share_concepts, 'dividend_per_share'),
-            'dividend_yield': self.get_financial_data(dividend_yield_concepts, 'dividend_yield'),
-            'payout_ratio': self.get_financial_data(payout_ratio_concepts, 'payout_ratio')
-        }
-
-    def shares_outstanding(self) -> Dict:
-        shares_concepts = [
-            'EntityCommonStockSharesOutstanding',
-            'CommonStockSharesOutstanding',
-            'WeightedAverageNumberOfDilutedSharesOutstanding',
-            'CommonStockSharesIssued'
-        ]
-        shares_data = self.get_financial_data(shares_concepts, 'shares_outstanding')
-
-        return shares_data
-
-    def get_latest_metric_value(self, concepts: list, metric_name: str) -> float:
-        """Generic function to get the latest value for a given concept list."""
-        # Reusing the logic from get_latest_balance_sheet_value for broader use
-        for concept in concepts:
-            query = f"""
-                SELECT value
-                FROM financial_data
-                WHERE concept_id = '{concept}'
-                -- Using filing_date DESC might be more reliable for latest point-in-time value
-                ORDER BY filing_date DESC, end_date DESC
-                LIMIT 1
-            """
-            result = self.con.sql(query).df()
-            if not result.empty:
-                print(f"Found value for {metric_name} using concept: {concept}")
-                return result['value'].iloc[0]
-        print(f"Warning: No data found for {metric_name} concepts: {concepts}")
-        return 0.0
-
-    def get_total_assets(self) -> float:
-        """Get latest total assets value."""
-        # Common concepts for Total Assets
-        concepts = ['Assets', 'AssetsCurrent', 'AssetsNoncurrent'] # Assets is usually comprehensive
-        # If 'Assets' isn't found, could try summing Current and Noncurrent, but 'Assets' is preferred
-        return self.get_latest_metric_value(concepts, 'Total Assets')
-
-    def get_total_liabilities(self) -> float:
-        """Get latest total liabilities value."""
-        # Common concepts for Total Liabilities
-        concepts = ['Liabilities', 'LiabilitiesCurrent', 'LiabilitiesNoncurrent'] # Liabilities is comprehensive
-        # If 'Liabilities' isn't found, could try summing Current and Noncurrent
-        return self.get_latest_metric_value(concepts, 'Total Liabilities')
-
-    def get_latest_dividend_per_share(self) -> float:
-        """Get the most recently declared or paid dividend per share."""
-        # Common concepts for Dividends Per Share
-        concepts = [
-            'CommonStockDividendsPerShareDeclared',
-            'CommonStockDividendsPerShareCashPaid',
-            'DividendsCommonStockCash' # This might be total dividends, needs check
-            # Add other potential concepts if needed
-        ]
-        # We need the latest value reported, likely from the latest filing date
-        return self.get_latest_metric_value(concepts, 'Dividend Per Share')
+    def get_shares_outstanding(self) -> float:
+        """
+        special handling for shares, usually have different names
+        """        
+        return self.get_latest_value('shares_outstanding')
 
     def close(self):
         """Close DuckDB connection"""
         self.con.close()
+
+
+if __name__ == '__main__':
+    # cik 104169 walmart
+    # 1730168 broadcom
+    #  2488 amd
+    #  320193 apple
+    # 1045810 nvidia
+    # 1652044  google
+    # 1018724 amazon
+    process = FinancialDataProcessor(
+        cik=2488,
+        years_statement= 3
+    )
+
+    print(
+        process.get_income_statement_metrics(),
+        '*************************************',
+        process.get_balance_sheet_metrics(),
+    )
