@@ -125,83 +125,6 @@ class FinancialDataETL:
         df = self.extract_and_transform()
         self.save_consolidated(df)
 
-
-LABEL_MAPPING = {
-    # --- Revenue ---
-    "Contract Revenue": "revenues",
-    "Net sales": "revenues",
-    "Net revenue": "revenues",
-    "Net revenues": "revenues",
-    "Total net sales": "revenues",
-    "Revenue": "revenues",
-    "Revenues": "revenues",
-
-    # --- Operating Income ---
-    "Operating Income": "operating_income",
-    "Operating income": "operating_income",
-    "Operating Income (Loss)": "operating_income",
-
-    # --- Interest Expense ---
-    "Interest Expense": "interest_expense",
-    "Interest expense": "interest_expense",
-    "Interest expense, net": "interest_expense",
-    "Interest Expense (non-operating)": "interest_expense",
-
-    # --- Tax Expense ---
-    "Income Tax Expense": "tax_expense",
-    "Income tax provision": "tax_expense",
-    "Provision for Income Taxes": "tax_expense",
-    "Provision for (benefit from) income taxes": "tax_expense",
-
-    # --- Net Income ---
-    "Net Income": "net_income",
-    "Net Income from Continuing Operations": "net_income",
-    "Net Income (Loss)": "net_income",
-    "Basic Net Income Available to Common Shareholders": "net_income",
-
-    # --- Balance Sheet (Assets) ---
-    "Cash and cash equivalents": "cash",
-    "Cash and Cash Equivalents": "cash",
-    "Cash, cash equivalents and restricted cash": "cash",
-
-    # --- Balance Sheet (Equity) ---
-    "Total stockholders' equity": "equity",
-    "Total Stockholders' Equity": "equity",
-    "Total equity": "equity",
-    "Stockholders' equity": "equity",
-    "Shareholders' equity": "equity",
-    "Total deficit": "equity",
-    "Total stockholders' deficit": "equity",
-
-    # --- Balance Sheet (Debt) ---
-    "Long Term Debt": "long_term_debt",
-    "Long-Term Debt": "long_term_debt",
-    "Long-term debt": "long_term_debt",
-    "Long-term debt, net": "long_term_debt",
-    "Notes payable and long-term debt, less current portion": "long_term_debt",
-
-    "Short-term debt": "short_term_debt",
-    "Short-term borrowings": "short_term_debt",
-    "Current portion of long-term debt": "short_term_debt",
-    "Commercial paper": "short_term_debt",
-
-    # --- Cash Flow ---
-    "Payments to acquire property, plant and equipment": "capex",
-    "Purchases of property, plant and equipment": "capex",
-    "Purchases of property and equipment": "capex",
-    "Capital expenditures": "capex",
-
-    "Depreciation and amortization": "depreciation",
-    "Depreciation": "depreciation",
-    "Depreciation and amortization of property and equipment": "depreciation",
-
-    # --- Entity / Shares ---
-    "Common Stock Shares Outstanding": "shares_outstanding",
-    "Weighted average shares outstanding - diluted": "shares_outstanding",
-    "Shares Outstanding (Diluted)": "shares_outstanding"
-}
-
-
 if __name__ == '__main__':
     # cik 104169 walmart
     # 1730168 broadcom
@@ -211,8 +134,9 @@ if __name__ == '__main__':
     # 1652044  google
     # 1018724 amazon
 
-    company = Company(cik_or_ticker=2488)
-    filings = company.get_filings(form="10-K").latest(2)
+    company = Company(cik_or_ticker="1730168")
+    filings = company.get_filings(form="10-K").latest(4)
+    # annual_report = company.latest('10-K')
 
     multi_financials = MultiFinancials.extract(filings)
     multi_income = multi_financials.income_statement()
@@ -230,10 +154,10 @@ if __name__ == '__main__':
     # )
     print(
         # multi_income.to_dataframe()
-        '-----------------income statement----------------------------',
-        xbrl.statements.income_statement().to_dataframe(),
-        '--------------balance sheet------------------------------',
-        xbrl.statements.balance_sheet().to_dataframe(),
-        '--------------cash flow------------------------------',
+        # '-----------------income statement----------------------------',
+        # xbrl.statements.income_statement().to_dataframe(),
+        # '--------------balance sheet------------------------------',
+        # xbrl.statements.balance_sheet().to_dataframe(),
+        # '--------------cash flow------------------------------',
         xbrl.statements.cashflow_statement().to_dataframe(),
     )
