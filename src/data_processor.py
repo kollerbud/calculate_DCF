@@ -205,18 +205,31 @@ class FinancialDataProcessor:
             custom_aliases: Optional[List[str]] = None
         ) -> pd.DataFrame:
         """
-        get all values for a standardized concept over time
+        get all values for a standardized concept over time,
+        ignoring dashes and apostrophes in both the aliases and the data.
         """
         aliases = custom_aliases or self._get_aliases(metric_name)
-        safe_aliases = [a.replace("'", "''") for a in aliases]
-        alias_list_str = "', '".join(safe_aliases)
+        
+        # 1. Clean the python aliases (remove standard quotes, smart quotes, and dashes)
+        cleaned_aliases = [
+            a.replace("'", "").replace("’", "").replace("-", "") 
+            for a in aliases
+        ]
+        
+        # Join them for the SQL IN clause (no need to escape single quotes anymore since we removed them)
+        alias_list_str = "', '".join(cleaned_aliases)
 
+        # 2. Clean the concept_id inside the DuckDB query using nested REPLACE functions
+        # DuckDB uses '''' to represent a single escaped apostrophe in a string literal
         query = f"""
-            SELECT value, end_date, concept_id
+            SELECT 
+                value, 
+                end_date, 
+                REPLACE(REPLACE(REPLACE(concept_id, '''', ''), '’', ''), '-', '') AS clean_concept
             FROM financial_data
             WHERE cik = '{self.cik}'
             AND form = '{self.filing_type}'
-            AND concept_id IN ('{alias_list_str}')
+            AND REPLACE(REPLACE(REPLACE(concept_id, '''', ''), '’', ''), '-', '') IN ('{alias_list_str}')
             ORDER BY end_date DESC
             LIMIT {self.years_statement * 5}
         """
@@ -224,16 +237,20 @@ class FinancialDataProcessor:
         try:
             df_all = self.con.sql(query).df()
         except Exception as e:
-            print(f'error feteching time series for {metric_name}: {e}')
+            print(f'error fetching time series for {metric_name}: {e}')
             return pd.DataFrame()
 
         if df_all.empty:
             return pd.DataFrame()
 
         df_all['end_date'] = pd.to_datetime(df_all['end_date'])
-        # create a priority mapping of 'aliases'
-        priority_map = {alias: i for i, alias in enumerate(aliases)}
-        df_all['priority'] = df_all['concept_id'].map(priority_map)
+        
+        # 3. Create a priority mapping mapping using our CLEANED aliases
+        priority_map = {alias: i for i, alias in enumerate(cleaned_aliases)}
+        
+        # Map against the 'clean_concept' column we returned from SQL
+        df_all['priority'] = df_all['clean_concept'].map(priority_map)
+        
         # sort by date
         df_all = df_all.sort_values(by=['end_date', 'priority'], ascending=[False, True])
         # drop duplicates on 'end_date'
@@ -293,18 +310,18 @@ if __name__ == '__main__':
     # 1652044  google
     # 1018724 amazon
     process = FinancialDataProcessor(
-        cik=1045810,
+        cik=320193,
         years_statement= 4
     )
     # print(process.get_time_series(metric_name='long_term_debt'))
-    debug_df = process.con.sql("""
-        SELECT DISTINCT concept_id
-        FROM financial_data
-        WHERE LOWER(concept_id) LIKE '%equity%'
-          -- OR LOWER(concept_id) LIKE '%expense%'
-    """).df()
-    print("AVAILABLE SHARE LABELS IN DB:")
-    print(debug_df.to_string())
+    # debug_df = process.con.sql("""
+    #     SELECT DISTINCT concept_id
+    #     FROM financial_data
+    #     WHERE LOWER(concept_id) LIKE '%equity%'
+    #       -- OR LOWER(concept_id) LIKE '%expense%'
+    # """).df()
+    # print("AVAILABLE SHARE LABELS IN DB:")
+    # print(debug_df.to_string())
 
     print(
         # process.get_income_statement_metrics(),
