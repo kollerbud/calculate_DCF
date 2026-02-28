@@ -1,10 +1,10 @@
-[tool.poetry]
-name = "calculate-dcf"
+[project]
+name = "calculate_DCF"
 version = "0.1.0"
-description = ""
-authors = ["kollerbud <kollerbud@gmail.com>"]
-readme = "README.md"
-requires-python = ">=3.11"
+description = "A project to calculate DCF"
+authors = [
+    {name = "Your Name", email = "you@example.com"}
+]
 
 dependencies = [
     "edgartools>=5.3.0",

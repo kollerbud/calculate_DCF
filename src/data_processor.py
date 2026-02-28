@@ -310,20 +310,20 @@ if __name__ == '__main__':
     # 1652044  google
     # 1018724 amazon
     process = FinancialDataProcessor(
-        cik=320193,
+        cik=2488,
         years_statement= 4
     )
     # print(process.get_time_series(metric_name='long_term_debt'))
-    # debug_df = process.con.sql("""
-    #     SELECT DISTINCT concept_id
-    #     FROM financial_data
-    #     WHERE LOWER(concept_id) LIKE '%equity%'
-    #       -- OR LOWER(concept_id) LIKE '%expense%'
-    # """).df()
-    # print("AVAILABLE SHARE LABELS IN DB:")
-    # print(debug_df.to_string())
+    debug_df = process.con.sql("""
+        SELECT DISTINCT concept_id
+        FROM financial_data
+        WHERE LOWER(concept_id) LIKE '%debt%'
+          -- OR LOWER(concept_id) LIKE '%expense%'
+    """).df()
+    print("AVAILABLE SHARE LABELS IN DB:")
+    print(debug_df.to_string())
 
-    print(
-        # process.get_income_statement_metrics(),
-        process.get_balance_sheet_metrics(),
-    )
+    # print(
+    #     process.get_income_statement_metrics(),
+    #     process.get_balance_sheet_metrics(),)
+    

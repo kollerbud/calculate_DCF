@@ -22,7 +22,7 @@ class DCFModel:
     """
     data_loader: FinancialDataProcessor
     risk_free_rate: float = 0.04
-
+    
     @functools.cached_property
     def _raw_calculations(self) -> Dict:
         """
@@ -258,5 +258,3 @@ if __name__ == '__main__':
         print(f"{res['scenario_name']:<20} | ${res['implied_share_price']:<9.2f} | {res['growth_rate_start']:.1%}")
         
         # print(model._project_financials(scenario=scen))
-    
-    print(model._raw_calculations)
