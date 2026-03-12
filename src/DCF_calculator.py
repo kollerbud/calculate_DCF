@@ -1,7 +1,5 @@
-import functools
 from dataclasses import dataclass
-from typing import Dict, Optional, List
-import pandas as pd
+from typing import Dict, List
 from data_processor import FinancialDataProcessor
 
 @dataclass
@@ -10,251 +8,169 @@ class DCFScenario:
     custom scenarios
     """
     name: str
-    revenue_growth_rates: List[float]
-    fcf_margins: List[float]
     wacc: float
-    terminal_growth_rate: float
+    growth_start: float
+    margin_start: float
+    margin_end: float
+    terminal_growth: float = 0.03
 
-@dataclass
 class DCFModel:
     """
     Performs DCF calculations using data provided by FinancialDataLoader.
     """
-    data_loader: FinancialDataProcessor
-    risk_free_rate: float = 0.04
-    
-    @functools.cached_property
-    def _raw_calculations(self) -> Dict:
-        """
-        calculate basic financial metrics
-        changed to using fcf margin (OCF-capex)/revenue
-        """
-        revenues = self.data_loader.get_time_series('revenue')
-        # operating cash flow
-        ocf = self.data_loader.get_time_series('operating_cash_flow')
-        capex = self.data_loader.get_time_series('capex')
-        interest = self.data_loader.get_time_series('interest_expense')
-        current_shares = self.data_loader.get_latest_value('shares_outstanding')
+    def __init__(self, data_loader: FinancialDataProcessor):
+        self.data = data_loader
+        self.raw = self._extract_financials()
 
-        # get balance sheet & income statement items
-        metrics_to_fetch = [
-            'cash', 'equity', 'long_term_debt', 'short_term_debt',
-            'interest_expense', 'tax_expense', 'operating_income'
-        ]
 
-        balance_values = {}
-        for metric in metrics_to_fetch:
-            balance_values[metric] = self.data_loader.get_latest_value(metric)
+    def _extract_financials(self) -> Dict:
 
-        # calculate effective tax rate
-        pretax_income_df = self.data_loader.get_time_series(
-            'pretax_income',
-            custom_aliases=['IncomeLossFromContinuingOperationsBeforeIncomeTaxes']
-        )
-        if not pretax_income_df.empty:
-            pretax_income = pretax_income_df['value'].iloc[0]
-        else:
-            # Fallback: EBIT - Interest (Approximation)
-            ebit = balance_values.get('operating_income', 0)
-            pretax_income = ebit - balance_values.get('interest_expense', 0)
+        rev = self.data.get_time_series('revenue').head(4)
+        ocf = self.data.get_time_series('operating_cash_flow').head(4)
+        capex = self.data.get_time_series('capex').head(4)
+        # latest balance sheet numbers
+        cash = self.data.get_latest_value('cash')
+        debt = self.data.get_latest_value('long_term_debt')
+        shares = self.data.get_latest_value('shares_outstanding')
 
-        tax_expense = balance_values.get('tax_expense', 0)
+        if rev.empty or ocf.empty or len(rev) <2:
+            return {'valid': False}
 
-        if pretax_income > 0:
-            effective_tax_rate = max(0.0, min(tax_expense/pretax_income, 0.30))
-        else:
-            effective_tax_rate = 0.21 # default value
+        # cyclical smoothing
+        rev_vals = rev['value'].tolist()
+        cagr = (rev_vals[0] / rev_vals[-1]) ** (1 / (len(rev_vals) - 1)) - 1 if rev_vals[-1] > 0 else 0
+        # average fcf margin
+        # fcf = ocf - abs(capex)
+        historical_margins = []
+        for i in range(min(len(rev), len(ocf), len(capex))):
+            fcf = ocf['value'].iloc[i] - abs(capex['value'].iloc[i])
+            historical_margins.append(fcf/rev['value'].iloc[i])
 
-        fcf_margins = []
-        last_revenue = 0
+        avg_margin = sum(historical_margins)/len(historical_margins)
+        latest_margin = historical_margins[0]
 
-        if not revenues.empty and not ocf.empty:
-            last_revenue = revenues['value'].iloc[0]
-            merged = pd.merge(
-                revenues[['end_date', 'value']],
-                ocf[['end_date', 'value']],
-                on='end_date',
-                suffixes=('_rev', '_ocf')
-            )
-            if not capex.empty:
-                merged = pd.merge(
-                    merged,
-                    capex[['end_date', 'value']],
-                    on='end_date',
-                    how='left'
-                ).rename(columns={'value': 'value_capex'})
-            else:
-                merged['value_capex'] = 0
+        # semiconductor nuance--fabless vs IDM
+        # if capex is consistently >10% of revenue, they are likely fab-based company
+        capex_to_rev = abs(capex['value'].iloc[0])/rev['value'].iloc[0]
+        business_model = "IDM/Foundry" if capex_to_rev > 0.10 else "Fabless"
 
-            if not interest.empty:
-                merged = pd.merge(
-                    merged,
-                    interest[['end_date', 'value']],
-                    on='end_date',
-                    how='left'
-                ).rename(columns={'value': 'value_interest'})
-            else:
-                merged['value_interest'] = 0
+        # cap unrealistic extremes
+        cagr = min(max(cagr, -0.10), 0.60)
 
-            # FCF = OCF - CapEx + Interest * (1 - t)
-            # merged['fcf'] = (merged['value_ocf'] - merged['value_capex'].abs() + (merged['value_interest'] * (1 - effective_tax_rate)))
-            merged['fcf'] = merged['value_ocf'] + merged['value_capex']
-            merged['fcf_margin'] = merged['fcf'] / merged['value_rev']
-            fcf_margins = merged['fcf_margin'].tolist()
-
-        revenues_list = revenues['value'].tolist() if not revenues.empty else []
-        yoy_growth = []
-        if len(revenues_list) >= 2:
-            yoy_growth = [
-                (revenues_list[i] - revenues_list[i+1])/revenues_list[i+1]
-                for i in range(len(revenues_list)-1)
-            ]
-        avg_growth = sum(yoy_growth)/len(yoy_growth)
-        avg_margin = sum(fcf_margins)/len(fcf_margins)
-
-        return{
-            'last_revenue': last_revenue,
-            'avg_fcf_margin': avg_margin,
-            'historical_growth': avg_growth,
-            'cash': balance_values.get('cash', 0),
-            'debt': balance_values.get('long_term_debt',0) + balance_values.get('short_term_debt',0),
-            'shares_outstanding': current_shares,
+        return {
+            'valid': True,
+            'last_revenue': rev_vals[0],
+            'cagr': cagr,
+            'avg_margin': avg_margin,
+            'latest_margin': latest_margin,
+            'cash': cash,
+            'debt': debt,
+            'shares': shares,
+            'business_model': business_model,
+            'capex_to_rev': capex_to_rev
         }
+    def generate_scenarios(self) -> List[DCFScenario]:
+        """
+        Creates semi-specific scenarios using Wall Street 'sanity checks'
+        to bridge the gap between historical GAAP data and forward-looking market pricing.
+        """
+        hist_growth = self.raw['cagr']
+        hist_margin = self.raw['avg_margin']
+        biz_model = self.raw['business_model']
 
-    def _calculate_decay(
-        self, start_rate: float,
-        end_rate: float, years: int = 5
-    ) -> List[float]:
-        """
-        create a smooth decay curve from start to end rate
-        """
+        # Wall Street ignores non-cash acquisition amortizations. A top-tier
+        # Fabless company operates at a bare minimum 20% FCF margin.
+        if biz_model == "Fabless":
+            start_margin = max(0.20, hist_margin)
+            normalized_terminal_margin = max(0.25, start_margin) # Fabless mature at high margins
+            base_wacc = 0.105 # Higher beta / higher risk
+
+        # IDMs are highly cyclical. If historical margin is crushed due to heavy CapEx,
+        # we floor it slightly, but aggressively normalize it in the terminal phase.
+        elif biz_model == "IDM/Foundry":
+            start_margin = max(0.05, hist_margin) # Prevent negative starting cash flows
+            normalized_terminal_margin = 0.22 # Assume fabs are built and paying off by Year 10
+            base_wacc = 0.085 # Lower beta / stable dividend payers
+
+        # Semiconductors are in a secular mega-trend. Even if a company is in a
+        # short-term cyclical recession (negative hist_growth), the market expects
+        # long-term positive growth. We floor the starting growth at the GDP growth rate (3%).
+        base_growth = max(0.03, hist_growth)
+
         return [
-            start_rate - ((start_rate - end_rate) * (i/years))
-            for i in range(years)
+            DCFScenario("Average", base_wacc, base_growth, start_margin, normalized_terminal_margin, 0.03),
+            # Optimistic: Market prices in an "AI Supercycle" (Higher growth, expanding margins)
+            DCFScenario("Optimistic", base_wacc - 0.01, base_growth * 1.3, start_margin * 1.2, normalized_terminal_margin * 1.15, 0.04),
+            # Pessimistic: Cycle stays lower for longer
+            DCFScenario("Pessimistic", base_wacc + 0.01, base_growth * 0.5, start_margin * 0.8, normalized_terminal_margin * 0.8, 0.02)
         ]
 
-    def generate_scenarios(self, use_wacc: float = None) -> List[DCFScenario]:
-        """
-        generates 3 scenarios based on historic performance
-        """
-        raw = self._raw_calculations
-        base_growth = raw['historical_growth']
-        base_margin = raw['avg_fcf_margin']
+    def calculate_dcf(self, scenario: DCFScenario, years: int = 10) -> Dict:
+        rev = self.raw['last_revenue']
+        discounted_fcf = 0
 
-        # Sanity caps: If historical growth is crazy (>50%), temper the base for projections
-        # to avoid unrealistic perpetual hyper-growth
-        projection_start_growth = min(base_growth, 0.50)
+        last_fcf = 0
+        for year in range(1, years + 1):
+            # Fade growth to terminal rate
+            growth = scenario.growth_start - ((scenario.growth_start - scenario.terminal_growth) * (year / years))
+            # Fade margin to normalized terminal margin (fixes Intel)
+            margin = scenario.margin_start - ((scenario.margin_start - scenario.margin_end) * (year / years))
 
-        # Average Case
-        avg_growth_rates = self._calculate_decay(projection_start_growth, self.risk_free_rate * 2)
-        avg_scenario = DCFScenario(
-            name='Average Case',
-            revenue_growth_rates=avg_growth_rates,
-            fcf_margins=[base_margin] * 5,
-            wacc= use_wacc if use_wacc else 0.10, # <----- hardcore WACC
-            terminal_growth_rate=0.03
-        )
-        # Optimistic Case
-        opt_start = min(base_growth * 1.2, 0.60) # Cap at 60% start
-        opt_growth_rates = self._calculate_decay(opt_start, self.risk_free_rate * 3)
-        opt_margin = min(base_margin * 1.1, 0.60) # Cap margin at 60%
-        opt_scenario = DCFScenario(
-            name="Optimistic Case",
-            revenue_growth_rates=opt_growth_rates,
-            fcf_margins=[opt_margin] * 5,
-            wacc=use_wacc if use_wacc else 0.10, # <----- hardcore WACC
-            terminal_growth_rate=0.04
-        )
-        # Pessimistic Case
-        pess_start = base_growth * 0.8
-        pess_growth_rates = self._calculate_decay(pess_start, self.risk_free_rate)
-        pess_margin = base_margin * 0.9
-        pess_scenario = DCFScenario(
-            name="Pessimistic Case",
-            revenue_growth_rates=pess_growth_rates,
-            fcf_margins=[pess_margin] * 5,
-            wacc=use_wacc if use_wacc else 0.11, # Higher risk premium
-            terminal_growth_rate=0.02
-        )
+            rev *= (1 + growth)
+            fcf = rev * margin
+            discounted_fcf += fcf / ((1 + scenario.wacc) ** year)
+            last_fcf = fcf
 
-        return [avg_scenario, opt_scenario, pess_scenario]
+        # Terminal Value (Gordon Growth)
+        tv = (last_fcf * (1 + scenario.terminal_growth)) / (scenario.wacc - scenario.terminal_growth)
+        pv_tv = tv / ((1 + scenario.wacc) ** years)
 
-    def _project_financials(self, scenario: DCFScenario) -> Dict:
-        """
-        Project future financials
-        """
-        raw = self._raw_calculations
-        current_revenue = raw['last_revenue']
-        
-        projected_revenues = []
-        projected_fcf = []
-        
-        for i in range(5):
-            growth_rate = scenario.revenue_growth_rates[i]
-            if len(scenario.fcf_margins) > i:
-                margin = scenario.fcf_margins[i]
-            else:
-                margin = scenario.fcf_margins[-1]
-            
-            current_revenue = current_revenue * (1+growth_rate)
-            fcf = current_revenue * margin
-            
-            projected_revenues.append(current_revenue)
-            projected_fcf.append(fcf)
+        enterprise_value = discounted_fcf + pv_tv
+        equity_value = enterprise_value + self.raw['cash'] - self.raw['debt']
+        price = equity_value / self.raw['shares'] if self.raw['shares'] > 0 else 0
 
         return {
-            'projected_revenues': projected_revenues,
-            'projected_fcf': projected_fcf
-        }
-
-    def calculate_dcf(self, scenario: DCFScenario) -> Dict:
-        """Calculate DCF valuation"""
-        raw = self._raw_calculations
-        projections = self._project_financials(scenario)
-        projected_fcf = projections['projected_fcf']
-        
-        wacc = scenario.wacc
-        discounted_fcf = [fcf / ((1 + wacc) ** (i + 1)) for i, fcf in enumerate(projected_fcf)]
-        # Terminal Value
-        last_fcf = projected_fcf[-1]
-        terminal_value = (last_fcf * (1 + scenario.terminal_growth_rate)) / (wacc - scenario.terminal_growth_rate)
-        pv_terminal_value = terminal_value / ((1 + wacc) ** len(projected_fcf))
-
-        enterprise_value = sum(discounted_fcf) + pv_terminal_value
-        equity_value = enterprise_value + raw['cash'] - raw['debt']
-        
-        shares = raw['shares_outstanding']
-        price = equity_value / shares if shares > 0 else 0
-
-        return {
-            'scenario_name': scenario.name,
-            'implied_share_price': price,
-            'equity_value': equity_value,
-            'growth_rate_start': scenario.revenue_growth_rates[0],
-            'growth_rate_end': scenario.revenue_growth_rates[-1],
-            'avg_margin': sum(scenario.fcf_margins)/len(scenario.fcf_margins)
+            'name': scenario.name,
+            'price': price,
+            'start_growth': scenario.growth_start,
+            'end_margin': scenario.margin_end
         }
 
     def close(self):
-        self.data_loader.close()
+        self.data.close()
+
+def evaluate_semi_industry():
+    companies = {
+        'Broadcom': 1730168, 'AMD': 2488, 'Nvidia': 1045810,
+        'Intel': 50863, 'Texas Inst': 97476, 'Qualcomm': 804328, 'Micron': 723125,
+    }
+
+    for name, cik in companies.items():
+        print(f"\n{name.upper()} (CIK: {cik})")
+        print("-" * 65)
+
+        try:
+            loader = FinancialDataProcessor(cik=cik, years_statement=4, filing_type='10-K')
+            model = DCFModel(loader)
+
+            if not model.raw['valid']:
+                print("  [!] Skipping: Missing fundamental data.")
+                continue
+
+            print(f"  Profile: {model.raw['business_model']} (CapEx/Rev: {model.raw['capex_to_rev']:.1%})")
+            print(f"  Hist. CAGR: {model.raw['cagr']:.1%} | 4-Yr Avg Margin: {model.raw['avg_margin']:.1%}")
+
+            scenarios = model.generate_scenarios()
+            print(f"  {'SCENARIO':<15} | {'PRICE':>10} | {'GROWTH->TERM':>15} | {'END MARGIN':>10}")
+            for s in scenarios:
+                res = model.calculate_dcf(s)
+                print(f"  {res['name']:<15} | ${res['price']:>9.2f} | {res['start_growth']:.1%} -> {s.terminal_growth:.1%} | {res['end_margin']:>9.1%}")
+
+        except Exception as e:
+            print(f"  [!] Error: {e}")
+        finally:
+            if 'model' in locals(): model.close()
+
 
 if __name__ == '__main__':
-    # cik 104169 walmart
-    # 1730168 broadcom
-    #  2488 amd
-    #  320193 apple
-    # 1045810 nvidia
-    # 1652044  google
-    # 1018724 amazon
-    # 789019 msft
-    loader = FinancialDataProcessor(cik=2488, years_statement=3)
-    model = DCFModel(data_loader=loader)
-    print(model._raw_calculations)
-    scenarios = model.generate_scenarios(use_wacc=0.096)
-    print(f"{'SCENARIO':<20} | {'PRICE':<10} | {'START GROWTH':<15}")
-    print("-" * 50)
-    for scen in scenarios:
-        res = model.calculate_dcf(scen)
-        print(f"{res['scenario_name']:<20} | ${res['implied_share_price']:<9.2f} | {res['growth_rate_start']:.1%}")
-        
-        # print(model._project_financials(scenario=scen))
+    evaluate_semi_industry()
