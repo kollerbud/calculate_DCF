@@ -1,6 +1,7 @@
 notes.txt
 api_keys.py
 save_to_db.py
+uv.lock
 Lib/
 Scripts/
 */Scripts/
