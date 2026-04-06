@@ -1,6 +1,8 @@
+import pandas as pd
+import numpy as np
 from dataclasses import dataclass
 from typing import Dict, List
-from data_processor import FinancialDataProcessor
+
 
 @dataclass
 class DCFScenario:
@@ -12,16 +14,17 @@ class DCFScenario:
     growth_start: float
     margin_start: float
     margin_end: float
-    terminal_growth: float = 0.03
+    terminal_growth: float = 0.025
 
 class DCFModel:
     """
     Performs DCF calculations using data provided by FinancialDataLoader.
     """
-    def __init__(self, data_loader: FinancialDataProcessor):
-        self.data = data_loader
-        self.raw = self._extract_financials()
-
+    def __init__(self, ticker: str, df_financials: pd.DataFrame):
+        self.ticker = ticker
+        self.df = df_financials.sort_values(by='year').reset_index(drop=True)
+        self.raw = self._extract_historical_drivers()
+        
 
     def _extract_financials(self) -> Dict:
 
